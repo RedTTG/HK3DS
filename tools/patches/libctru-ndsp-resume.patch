@@ -1,0 +1,46 @@
+--- a/libctru/source/ndsp/ndsp.c	2026-10-24 03:37:24.428726673 -0400
++++ b/libctru/source/ndsp/ndsp.c	2026-10-24 03:37:24.470580023 -0400
+@@ -257,10 +257,27 @@
+ 	DSP_SetSemaphore(0x4000);
+ 	ndspWaitForIrq(U64_MAX);
+ 
+-	DSP_ReadPipeIfPossible(2, 0, &val, sizeof(val), NULL);
+-
++	// HK3DS patch: the DSP may not answer (seen on resume from HOME/sleep). Upstream then used uninitialized data
++	// as DSP addresses and crashed writing to them. Validate the reply, retry briefly, and fail cleanly instead.
+ 	u16 vars[16];
+-	DSP_ReadPipeIfPossible(2, 0, vars, val*2, NULL);
++	u16 nread = 0, nvars = 0;
++	for (int tries = 0; tries < 50; tries ++)
++	{
++		nread = 0; val = 0;
++		DSP_ReadPipeIfPossible(2, 0, &val, sizeof(val), &nread);
++		if (nread == sizeof(val)) break;
++		svcSleepThread(2000000ULL); // 2 ms
++	}
++	if (nread != sizeof(val) || val == 0 || val > 16) { rc = MAKERESULT(RL_PERMANENT, RS_NOTSUPPORTED, RM_DSP, RD_NO_DATA); goto _fail3; }
++	memset(vars, 0, sizeof(vars));
++	for (int tries = 0; tries < 50 && nvars < val*2; tries ++)
++	{
++		nread = 0;
++		DSP_ReadPipeIfPossible(2, 0, (u8*)vars + nvars, val*2 - nvars, &nread);
++		nvars += nread;
++		if (nvars < val*2) svcSleepThread(2000000ULL);
++	}
++	if (nvars != val*2) { rc = MAKERESULT(RL_PERMANENT, RS_NOTSUPPORTED, RM_DSP, RD_NO_DATA); goto _fail3; }
+ 	for (unsigned i = 0; i < val; i ++)
+ 	{
+ 		DSP_ConvertProcessAddressFromDspDram(vars[i],           (u32*)&ndspVars[i][0]);
+@@ -351,7 +368,11 @@
+ 			{
+ 				Result res = ndspInitialize(true);
+ 				if (R_FAILED(res))
+-					svcBreak(USERBREAK_PANIC); // Shouldn't happen.
++				{
++					// HK3DS patch: keep running without sound instead of panicking
++					bDspReady = false;
++					bCancelReceived = true;
++				}
+ 
+ 				bSleeping = false;
+ 				bEnteringSleep = false;

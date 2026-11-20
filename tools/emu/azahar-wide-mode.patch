@@ -1,0 +1,17 @@
+diff --git a/src/video_core/renderer_software/renderer_software.cpp b/src/video_core/renderer_software/renderer_software.cpp
+index 14aabca..bbbce68 100644
+--- a/src/video_core/renderer_software/renderer_software.cpp
++++ b/src/video_core/renderer_software/renderer_software.cpp
+@@ -45,7 +45,11 @@ void RendererSoftware::LoadFBToScreenInfo(int i, const Pica::ColorFill& color_fi
+     const u8* framebuffer_data = memory.GetPhysicalPointer(framebuffer_addr);
+ 
+     const s32 pixel_stride = framebuffer.stride / bpp;
+-    info.height = framebuffer.height;
++    // New 3DS 800px wide mode: libctru marks the top screen 2D (bit 6) or 3D (bit 5); wide mode sets neither, and
++    // the framebuffer then holds 800 columns, each shown at half width
++    const bool wide = fb_id == 0 && (framebuffer.format & 0x70) == 0 && framebuffer.height == 400 &&
++                      framebuffer_addr != 0;
++    info.height = wide ? 800u : static_cast<u32>(framebuffer.height);
+     info.width = pixel_stride;
+     info.pixels.resize(info.width * info.height * 4);
+ 

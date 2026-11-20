@@ -1,0 +1,29 @@
+# Converted game assets come from your own copy of Hollow Knight: never commit them.
+romfs/
+romfs_hd/
+romfs_*/
+*.3dsx
+*.cia
+*.cia.0*
+*.smdh
+*.elf
+*.map
+*.lyr
+*.spr
+*.obj
+*.msk
+*.pkl
+*.wav
+*.ogg
+*.png
+build/
+build_hd/
+shots/
+sdmc/
+previews/
+host/hk3ds_host*
+tools/__pycache__/
+__pycache__/
+# tool output written next to the tools
+tools/data/uoroots/
+tools/data/*.json
