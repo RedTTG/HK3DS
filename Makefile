@@ -46,6 +46,8 @@ ifeq ($(HD),1)
 CFLAGS  += -DHK_HD
 endif
 CFLAGS  += -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable
+# every fopen of a romfs:/ file checks for a data patch on the SD card first (source/patch.c)
+CFLAGS  += -include hkfile.h
 CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 ASFLAGS := -g $(ARCH)
 LDFLAGS  = -specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
@@ -116,6 +118,8 @@ ifneq ($(BUILD),$(notdir $(CURDIR)))
 cia: all
 	@bannertool makebanner -i $(BANNER) -a cia/banner.wav -o $(BUILD)/banner.bnr
 	@bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i $(ICON) -o $(BUILD)/icon.icn
+	@# the data's version: a later code patch over this install can tell it's older (source/patch.c)
+	@V=$$(sed -n 's/.*HK3DS_VERSION "\(.*\)"/\1/p' source/version.h); R=$$(sed -n 's/^ *RootPath *: *//p' $(RSF)); rm -f $$R/text/version.txt; echo $$V > $$R/text/version.txt
 	@makerom -f cia -o $(TARGET).cia -elf $(TARGET).elf -rsf $(RSF) -icon $(BUILD)/icon.icn -banner $(BUILD)/banner.bnr -exefslogo -target t
 	@echo built ... $(TARGET).cia
 endif

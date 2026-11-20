@@ -26,11 +26,18 @@ static char *script; static int segFrames[4096]; static u32 segKeys[4096]; stati
 static long shots[256]; static int nshots;
 static const char *outDir = "shots";
 
-FILE *host_fopen(const char *p, const char *m) {
+FILE *host_open_mapped(const char *p, const char *m) {
     char buf[512];
     if (!strncmp(p, "romfs:/", 7)) { snprintf(buf, sizeof buf, "romfs/%s", p + 7); return fopen(buf, m); }
     if (!strncmp(p, "sdmc:/", 6)) { snprintf(buf, sizeof buf, "sdmc/%s", p + 6); return fopen(buf, m); }
     return fopen(p, m);
+}
+FILE *host_fopen(const char *p, const char *m) {
+    // a data patch on the SD card (source/patch.c) takes the place of the romfs file
+    extern bool hk_patch_path(const char *path, char *out, size_t size);
+    char pp[256];
+    if (m[0] == 'r' && hk_patch_path(p, pp, sizeof pp)) { FILE *f = host_open_mapped(pp, m); if (f) return f; }
+    return host_open_mapped(p, m);
 }
 int host_mkdir(const char *p, int mode) {
     char buf[512];

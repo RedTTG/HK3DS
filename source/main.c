@@ -7,6 +7,7 @@
 #include <string.h>
 #include "gfx.h"
 #include "audio.h"
+#include "patch.h"
 #include "game.h"
 #include "lang.h"
 #include "ach.h"
@@ -48,6 +49,7 @@ int main(int argc, char **argv) {
     C3D_RenderTarget *bot = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
 
     mkdir("sdmc:/3ds", 0777); mkdir("sdmc:/3ds/hk3ds", 0777);
+    hk_patch_init();     // a data patch on the SD card for this version (patch.c)
 #ifndef __HOST__
     hk_log("boot v" HK3DS_VERSION HK3DS_EDITION ": heap %luK linear %luK", (unsigned long)(envGetHeapSize() / 1024), (unsigned long)(envGetLinearHeapSize() / 1024));
     { bool n3ds = false; APT_CheckNew3DS(&n3ds);

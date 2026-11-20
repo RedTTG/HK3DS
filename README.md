@@ -96,6 +96,22 @@ Install). Sound needs `SD:/3ds/dspfirm.cdc` (dump it with DSP1).
 The HD build needs the New 3DS's full 124 MB. If line 2 of `SD:/3ds/hk3ds/log.txt` says `low memory`, turn off
 Luma3DS's "New 3DS CPU" setting (hold SELECT at boot): both builds already run at 804 MHz with the L2 cache.
 
+## Updating without reinstalling
+From v1.0.22, updates come as a small patch zip over the installed CIA:
+1. Copy the zip's `luma` and `3ds` folders to the root of the SD card.
+2. Turn on Luma3DS's **Enable game patching** (hold SELECT while powering on, select it, START to save).
+3. The title screen shows the new version.
+
+The new code goes in through Luma's game patching (`SD:/luma/titles/<title id>/code.bin` and `exheader.bin`;
+standard `000400000F4C3D00`, HD `000400000F4C3E00`). Data files changed since the CIA release go in
+`SD:/3ds/hk3ds/patch/std|hd/`, and the game reads them from there instead of the CIA (`source/patch.c`). Patches are
+cumulative, and a patch's data is only used by the version it was made for. If you install a newer full CIA later,
+delete the title's folder in `SD:/luma/titles`; the title screen warns you if an old patch is still loaded.
+
+`tools/make_patch.py` builds a patch from your two ELFs and the file lists of the CIAs you released
+(`tools/ctrfile.py romfs X.cia list.txt`). It checks the code against the ELF, because Luma halts the console on a
+malformed `code.bin`.
+
 ## Testing without a 3DS
 `host/` is a small software stand-in for libctru and citro2d that runs the real game code on a PC, headless, with
 scripted input and screenshots:

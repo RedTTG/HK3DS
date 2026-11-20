@@ -5,6 +5,7 @@
 #include "ach.h"
 #include "lang.h"
 #include "version.h"
+#include "patch.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -140,6 +141,16 @@ void menu_draw_top(void) {
             for (int i = 0; i < NMAIN; i++) items[i] = lang_get_or_key(mainKeys[i], "MainMenu");
             draw_items(items, NMAIN, 126, 21);
             font_draw(&A.fontText, "v" HK3DS_VERSION HK3DS_EDITION, TOP_W - 8 - font_width(&A.fontText, "v" HK3DS_VERSION HK3DS_EDITION) * 0.8f, TOP_H - 16, 0.8f, C2D_Color32(150, 150, 160, 255));
+            {   // Luma is loading an old patch's code over a newer full install (patch.c)
+                const char *w = hk_patch_warning();
+                for (int ln = 0; w && *w; ln++) {
+                    const char *e = strchr(w, '\n'); char line[128]; int n = e ? (int)(e - w) : (int)strlen(w);
+                    if (n > 127) n = 127;
+                    memcpy(line, w, n); line[n] = 0;
+                    font_draw_centered(&A.fontText, line, TOP_W / 2, 4 + ln * 14, 0.8f, C2D_Color32(255, 200, 120, 255));
+                    w = e ? e + 1 : NULL;
+                }
+            }
             break; }
         case M_SLOTS: case M_CLEAR: {
             C2D_DrawRectSolid(0, 0, 0.5f, TOP_W, TOP_H, C2D_Color32(0, 0, 0, 200));

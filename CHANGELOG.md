@@ -35,6 +35,24 @@ Everything in those rooms runs the game's own scripts (PlayMaker state machines 
 - **Music**: each room's music and ambience follow the game's music cues and music regions.
 - Glow and light sprites are drawn with additive blending, like in the game.
 
+## New in v1.0.22: updates as small patches
+- **No more downloading the whole game for a fix.** From v1.0.22 on, updates come as a small patch zip over the
+  installed CIAs (v1.0.22 itself is under 1 MB, against 1.4 GB and 2.1 GB for the CIAs). Copy its `luma` and `3ds`
+  folders to the root of the SD card and turn on Luma3DS's **Enable game patching** (hold SELECT while powering on).
+  The title screen then shows the new version.
+- How it works: the game code comes in through Luma3DS's game patching (`SD:/luma/titles/<title id>/code.bin` and
+  `exheader.bin`; standard `000400000F4C3D00`, HD `000400000F4C3E00`), and data files changed since the CIA
+  release sit in `SD:/3ds/hk3ds/patch/std/` and `patch/hd/` at their romfs paths, listed in `files.txt`. The game
+  reads a listed file from there instead of the CIA. Patches are cumulative, so only the newest one is needed.
+- A patch's data is only used by the version it was made for, so a leftover patch can't mix with a newer install. If
+  a newer full CIA is installed while Luma still loads an old patch's code, the title screen says so; delete that
+  title's folder in `SD:/luma/titles`.
+- Making one: build both ELFs (`make`, `make HD=1`), then `python tools/make_patch.py patches/base_v1.0.21 OUT`. It
+  extracts the code and exheader from a build made with the CIAs' own settings (`tools/ctrfile.py`), checks the code
+  against the ELF, and copies every data file that differs from the released CIAs' contents
+  (`patches/base_v1.0.21/std.txt` and `hd.txt`, read from the CIAs with `tools/ctrfile.py romfs`).
+- Full CIAs now record their data version in `romfs/text/version.txt` (`make cia` writes it).
+
 ## New in v1.0.21: an HD version for the New 3DS family, and a Button Hints option
 - **Two builds.** `hk3ds.cia` (standard, 400x240) runs on every 3DS and 2DS model. `hk3ds_hd.cia` (HD) is for the
   New 3DS, New 3DS XL and New 2DS XL: it switches the top screen to its 800x240 mode, and the room art, the Knight, the
