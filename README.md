@@ -62,6 +62,12 @@ python tools/alpha_cache.py         # hs_alpha4.pkl
 python tools/match_textures.py --all
 ```
 
+`tools/data/` holds the port's own lookup tables, which the converters read: `audio_map.json` (music and ambience
+cues), `script_guids.json` and `cs_sigs.json` (which game script each component is), `fsm_templates.json`,
+`particle_textures.json` and `uoroots/` (the objects each room converts). They hold no game assets.
+`cs_sigs.json` and `fsm_templates.json` can be rebuilt from your export with `python tools/cs_sigs.py` and
+`python tools/fsm_templates.py`.
+
 ### 2. Convert the game into `romfs/`
 `tools/full_rebuild.sh <objdir> <build dir> romfs tools/data/all_rooms.txt` runs the whole room conversion; its steps are:
 1. `python tools/build_objs.py <objdir> <Room...>`: every live object in a scene (NPCs, enemies, interactables, their
@@ -97,7 +103,8 @@ The HD build needs the New 3DS's full 124 MB. If line 2 of `SD:/3ds/hk3ds/log.tx
 Luma3DS's "New 3DS CPU" setting (hold SELECT at boot): both builds already run at 804 MHz with the L2 cache.
 
 ## Updating without reinstalling
-From v1.0.22, updates come as a small patch zip over the installed CIA:
+From v1.0.22, updates come as a small patch zip over the installed CIA. From v1.0.23 there is one zip per version
+(`hk3ds_patch_v<version>_std.zip` for the standard CIA, `_hd.zip` for the HD one): use the one for the CIA you have.
 1. Copy the zip's `luma` and `3ds` folders to the root of the SD card.
 2. Turn on Luma3DS's **Enable game patching** (hold SELECT while powering on, select it, START to save).
 3. The title screen shows the new version.

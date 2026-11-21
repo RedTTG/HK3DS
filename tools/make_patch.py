@@ -3,6 +3,7 @@
   luma/titles/<title id>/code.bin + exheader.bin   the new game code (Luma3DS "Enable game patching")
   3ds/hk3ds/patch/<std|hd>/...                     data files changed since the CIA release, and files.txt
 Patches are cumulative: each one holds everything changed since the base CIAs, so only the newest is needed.
+One zip per edition (standard, HD), each with only its own title.
 
    python tools/make_patch.py BASE_DIR OUT_DIR
 BASE_DIR holds std.txt and hd.txt, the file lists of the released CIAs (tools/ctrfile.py romfs X.cia list.txt).
@@ -61,30 +62,32 @@ def changed_files(base_list, root):
     return sorted(out), removed
 
 
-README = """HK3DS patch v{ver}
-==================
-This updates an installed HK3DS v{base} (standard and/or HD) to v{ver} without reinstalling the CIA.
+README = """HK3DS {edition} patch v{ver}
+{line}
+This updates an installed HK3DS {edition} v{base} ({cia}) to v{ver} without reinstalling the CIA.
+It is only for the {edition} version: the other version has its own patch zip.
 
 1. Copy the "luma" and "3ds" folders to the root of your SD card (merge them with the folders already there).
 2. Turn on game patching: hold SELECT while powering on to open the Luma3DS menu, select
    "Enable game patching", then START to save.
-3. Start the game: the title screen shows v{ver}.
+3. Start "{title}": the title screen shows v{ver}.
 
-Each patch holds everything since v{base}: a newer patch replaces this one (delete SD:/3ds/hk3ds/patch first).
-When you later install a full CIA of a newer version, delete SD:/luma/titles/{tid_std} and {tid_hd}
+Each patch holds everything since v{base}: a newer patch replaces this one.
+When you later install a full CIA of a newer version, delete SD:/luma/titles/{tid}
 (the game warns on its title screen if an old patch is still loaded).
 
-Changed data files: {nstd} (standard), {nhd} (HD).
+Changed data files: {n}.
 """
+NAMES = {'std': ('standard', 'hk3ds.cia', 'Hollow Knight 3DS'), 'hd': ('HD', 'hk3ds_hd.cia', 'Hollow Knight 3DS HD')}
 
 
 def main(base_dir, out_dir):
+    """one zip per edition (hk3ds_patch_v<ver>_std.zip, _hd.zip): each holds only its own title's code and data"""
     ver = version(); base_ver = open(f'{base_dir}/version.txt').read().strip() if os.path.exists(f'{base_dir}/version.txt') else '?'
-    stage = f'{out_dir}/hk3ds_patch_v{ver}'
-    shutil.rmtree(stage, ignore_errors=True); os.makedirs(stage)
-    counts, tids = {}, {}
     with tempfile.TemporaryDirectory() as tmp:
         for ed, target, rsf, root in EDITIONS:
+            stage = f'{out_dir}/hk3ds_patch_v{ver}_{ed}'
+            shutil.rmtree(stage, ignore_errors=True); os.makedirs(stage)
             tid, code, exh = build_code(target, rsf, tmp)
             check_code(code, f'{TOP}/{target}.elf')
             t = f'{stage}/luma/titles/{tid:016X}'; os.makedirs(t)
@@ -95,16 +98,16 @@ def main(base_dir, out_dir):
             for p in files:
                 os.makedirs(os.path.dirname(f'{pd}/{p}'), exist_ok=True); shutil.copyfile(f'{TOP}/{root}/{p}', f'{pd}/{p}')
             open(f'{pd}/files.txt', 'w').write(f'HKPATCH {ver}\n' + ''.join(p + '\n' for p in files))
-            counts[ed], tids[ed] = len(files), f'{tid:016X}'
-            print(f'{ed}: title {tid:016X}, code.bin {len(code)} B, {len(files)} data files')
-    open(f'{stage}/README_PATCH.txt', 'w').write(README.format(ver=ver, base=base_ver, tid_std=tids['std'], tid_hd=tids['hd'],
-                                                             nstd=counts['std'], nhd=counts['hd']))
-    z = f'{out_dir}/hk3ds_patch_v{ver}.zip'
-    with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for d, _, fs in os.walk(stage):
-            for f in fs:
-                p = os.path.join(d, f); zf.write(p, os.path.relpath(p, stage))
-    print('wrote', z, os.path.getsize(z), 'bytes')
+            edition, cia, title = NAMES[ed]
+            head = f'HK3DS {edition} patch v{ver}'
+            open(f'{stage}/README_PATCH.txt', 'w').write(README.format(edition=edition, line='=' * len(head), ver=ver, base=base_ver,
+                                                                     cia=cia, title=title, tid=f'{tid:016X}', n=len(files)))
+            z = f'{out_dir}/hk3ds_patch_v{ver}_{ed}.zip'
+            with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for d, _, fs in os.walk(stage):
+                    for f in fs:
+                        p = os.path.join(d, f); zf.write(p, os.path.relpath(p, stage))
+            print(f'{ed}: title {tid:016X}, code.bin {len(code)} B, {len(files)} data files -> {z} ({os.path.getsize(z)} bytes)')
 
 
 if __name__ == '__main__':
