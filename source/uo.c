@@ -1303,6 +1303,15 @@ bool uo_terrain_hit(float x0, float y0, float x1, float y1) {
     return false;
 }
 
+#ifdef __HOST__
+// tests: which object colliders are solid in a box (HK_SOLIDPROBE)
+void uo_terrain_report(float x0, float y0, float x1, float y1) {
+    for (int i = 0; i < ntbox; i++)
+        if (!TBOX_SKIP(i) && x0 < tbox[i][2] && x1 > tbox[i][0] && y0 < tbox[i][3] && y1 > tbox[i][1])
+            fprintf(stderr, "[probe] object %s box (%.2f,%.2f..%.2f,%.2f)\n", tboxOwner[i] ? tboxOwner[i]->name : "?", tbox[i][0], tbox[i][1], tbox[i][2], tbox[i][3]);
+}
+#endif
+
 /* ---------------- physics ---------------- */
 static int probe(float x0, float y0, float x1, float y1) {
     int m = 0; const float e = 0.03f, in = 0.02f;

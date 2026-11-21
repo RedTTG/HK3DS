@@ -849,6 +849,9 @@ static void call_method(Fsm *f, UObj *target, const char *b, const char *m, MArg
         else if (!strcmp(m, "SaveGame")) game_save_now();
         else if (!strcmp(m, "UnequipCharm")) { char k[40]; snprintf(k, sizeof k, "equippedCharm_%d", a0.i); pd_set_bool(k, false); game_charm_update(); }
         else if (!strcmp(m, "UpdateGameMap")) setb(res, map_update());
+        // the Hunter reads these to tell whether the Journal is complete; unset, 0 >= 0 read as "complete" and he
+        // handed over the Hunter's Mark on the second visit (journal_count.c, tools/gen_journal_count.py)
+        else if (!strcmp(m, "CountJournalEntries")) { extern void journal_count_entries(void); journal_count_entries(); }
     }
 }
 

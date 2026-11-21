@@ -286,6 +286,27 @@ static bool unstick_box(float *cx, float *cy, float hw, float hh, float maxd) {
 
 /* ---------------- world API (world.h) ---------------- */
 bool w_solid_box(float x0, float y0, float x1, float y1) { return solid_box(x0, y0, x1, y1); }
+#ifdef __HOST__
+// tests: HK_SOLIDPROBE="x0,y0,x1,y1" names what's solid in that box, every 60 frames
+void game_solid_probe(void) {
+    {   // HK_LISTGATES: the room's gates once per room (name, box, target)
+        static char listed[32];
+        if (getenv("HK_LISTGATES") && strcmp(listed, R.id)) { snprintf(listed, sizeof listed, "%s", R.id);
+            for (int k = 0; k < R.nents; k++) { const RoomEnt *q = &R.ents[k]; if (q->kind != EK_GATE) continue;
+                fprintf(stderr, "[gate] %s %s at (%.2f,%.2f) size %.2fx%.2f -> %s\n", R.id, q->name, q->x, q->y, q->w, q->h, q->target); } }
+    }
+    const char *e = getenv("HK_SOLIDPROBE"); static int fr; if (!e || ++fr % 60) return;
+    float x0, y0, x1, y1; if (sscanf(e, "%f,%f,%f,%f", &x0, &y0, &x1, &y1) != 4) return;
+    float rs = (float)R.res; int cells = 0;
+    for (int ty = (int)floorf(y0 * rs); ty <= (int)floorf(y1 * rs - 1e-4f); ty++)
+        for (int tx = (int)floorf(x0 * rs); tx <= (int)floorf(x1 * rs - 1e-4f); tx++) if (room_solid_cell(&R, tx, ty)) cells++;
+    fprintf(stderr, "[probe] %s (%.2f,%.2f..%.2f,%.2f): %d solid grid cells\n", R.id, x0, y0, x1, y1, cells);
+    extern void uo_terrain_report(float, float, float, float); uo_terrain_report(x0, y0, x1, y1);
+    for (int i = 0; i < R.nents && i < MAX_ENTS; i++) { if (!ent_is_solid(i)) continue; RoomEnt *en = &R.ents[i];
+        if (box_overlap(x0, y0, x1, y1, en->x - en->w / 2, en->y - en->h / 2 + ES[i].dy, en->x + en->w / 2, en->y + en->h / 2 + ES[i].dy))
+            fprintf(stderr, "[probe] entity %d at (%.2f,%.2f) size %.2fx%.2f\n", i, en->x, en->y, en->w, en->h); }
+}
+#endif
 int w_move_box(float *cx, float *cy, float hw, float hh, float dx, float dy, float stepUp) { return move_box_ex(cx, cy, hw, hh, dx, dy, stepUp); }
 bool w_unstick_box(float *cx, float *cy, float hw, float hh, float maxd) { return unstick_box(cx, cy, hw, hh, maxd); }
 float w_room_w(void) { return (float)R.w; }
@@ -720,6 +741,17 @@ bool game_continue(void) {
     }
     fclose(f);
     pd_set_bool("disablePause", false);     // a save made mid-cutscene or mid-hit never loads with pausing blocked
+    // up to v1.0.22 GameManager.CountJournalEntries did nothing, so the Hunter took any Journal as complete and gave his
+    // Mark early. With the Mark his hut's floor stays open over a pit that only the Mantis Claw climbs out of: take back
+    // a Mark given that way (the Hunter gives it again when the Journal really is complete, the test his talk makes)
+    if (pd_bool("hasHuntersMark")) {
+        extern void journal_count_entries(void); journal_count_entries();
+        if (pd_int("journalNotesCompleted") < pd_int("journalEntriesTotal")) {
+            pd_set_bool("hasHuntersMark", false); pd_set_bool("killedHunterMark", false); pd_set_int("killsHunterMark", 1);
+            pd_set_bool("hunterRewardOffered", false); pd_set_bool("pbi:Fungus1_08:Shiny Item HunterMark", false);
+            hk_log("save: Hunter's Mark given early (journal %d/%d), taken back", pd_int("journalNotesCompleted"), pd_int("journalEntriesTotal"));
+        }
+    }
     game_charm_update(); game_max_health();
     fade = 1; fadeTarget = 0; paused = false; transitioning = false;
     char r2[32]; strncpy(r2, room, 31); r2[31] = 0;
@@ -1530,6 +1562,9 @@ static void snap_camera(void) {
 /* ---------------- main update ---------------- */
 int game_update(float dt, u32 down, u32 held, u32 up, circlePosition cp) {
     dbgDt[dbgDtI++ % 60] = dt;
+#ifdef __HOST__
+    { extern void game_solid_probe(void); game_solid_probe(); }
+#endif
     hero_footsteps_end_frame();     // the run loop stops while paused, in menus, sitting, focusing...
     if (!paused) playTime += dt;
     ach_update(dt);
