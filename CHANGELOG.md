@@ -45,6 +45,13 @@ Everything in those rooms runs the game's own scripts (PlayMaker state machines 
   the Mark without a complete Journal now takes it back (the Mark, its Journal entry and the reward offer), so the
   hut is whole again and the Hunter gives the Mark when the Journal really is complete. If you are in the pit right
   now: Pause, Quit to Menu, Continue; you wake at your last bench.
+- **One patch zip per version.** `hk3ds_patch_v1.0.23_std.zip` for the standard CIA and `_hd.zip` for the HD one,
+  each with only its own title's folders.
+- **The patch checks the installed CIA.** A patch's code reads the installed CIA's data, so it is only made to work
+  over the CIA release it was made for (v1.0.21). Each patch's `files.txt` now lists a few room-art files of its base
+  CIA with their sizes
+  (`BASE` lines); if the installed ones differ, the title screen says to reinstall the v1.0.21 CIA, and `log.txt`
+  names the file.
 
 ## New in v1.0.22: updates as small patches
 - **No more downloading the whole game for a fix.** From v1.0.22 on, updates come as a small patch zip over the

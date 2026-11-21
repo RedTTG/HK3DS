@@ -16,6 +16,7 @@ import ctrfile
 
 EDITIONS = (('std', 'hk3ds', 'cia/hk3ds.rsf', 'romfs'), ('hd', 'hk3ds_hd', 'cia/hk3ds_hd.rsf', 'romfs_hd'))
 SKIP = {'text/version.txt'}      # describes the CIA's own data
+BASE_CHECK = ('rooms/Town.lyr', 'rooms/Tutorial_01.lyr', 'rooms/Crossroads_02.lyr', 'gfx/areas.spr')
 
 
 def version():
@@ -97,7 +98,11 @@ def main(base_dir, out_dir):
             pd = f'{stage}/3ds/hk3ds/patch/{ed}'; os.makedirs(pd)
             for p in files:
                 os.makedirs(os.path.dirname(f'{pd}/{p}'), exist_ok=True); shutil.copyfile(f'{TOP}/{root}/{p}', f'{pd}/{p}')
-            open(f'{pd}/files.txt', 'w').write(f'HKPATCH {ver}\n' + ''.join(p + '\n' for p in files))
+            # a few room-art files of the base CIA with their sizes: the game checks them and warns when another
+            # version's data is installed (the code would read room art in the wrong format)
+            sizes = {l.split()[2]: int(l.split()[1]) for l in open(f'{base_dir}/{ed}.txt') if len(l.split()) == 3}
+            base_lines = ''.join(f'BASE {p} {sizes[p]}\n' for p in BASE_CHECK if p in sizes)
+            open(f'{pd}/files.txt', 'w').write(f'HKPATCH {ver}\n' + base_lines + ''.join(p + '\n' for p in files))
             edition, cia, title = NAMES[ed]
             head = f'HK3DS {edition} patch v{ver}'
             open(f'{stage}/README_PATCH.txt', 'w').write(README.format(edition=edition, line='=' * len(head), ver=ver, base=base_ver,
