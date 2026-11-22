@@ -1,0 +1,6 @@
+GG_Arena_Prefab
+Warrior
+Boss Scene Controller
+Thorn Collider
+_SceneManager
+GG Ghost Boss Title

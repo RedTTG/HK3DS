@@ -61,18 +61,33 @@ void hk_patch_init(void) {
     if (strcmp(ver, HK3DS_VERSION)) {
         fclose(f); hk_log("patch v%s ignored: this is v" HK3DS_VERSION, ver); return;
     }
-    int cap = 0;
+    int cap = 0, baseBad = 0, baseN = 0;
     while (fgets(ln, sizeof ln, f)) {
         size_t l = strlen(ln);
         while (l && (ln[l - 1] == '\n' || ln[l - 1] == '\r' || ln[l - 1] == ' ')) ln[--l] = 0;
         if (!l || ln[0] == '#') continue;
+        // "BASE <romfs path> <size>": a file of the CIA this patch was made for. The patch's code reads the installed
+        // CIA's data, so an install of another version (whose room art differs) shows broken or missing art
+        if (!strncmp(ln, "BASE ", 5)) {
+            char bp[160], full[176]; long want;
+            if (sscanf(ln + 5, "%159s %ld", bp, &want) == 2) {
+                snprintf(full, sizeof full, "romfs:/%s", bp); baseN++;
+                FILE *b = open_raw(full, "rb"); long got = -1;
+                if (b) { fseek(b, 0, SEEK_END); got = ftell(b); fclose(b); }
+                if (got != want) { baseBad++; hk_log("patch: installed %s is %ld bytes, the patch's CIA has %ld", bp, got, want); }
+            }
+            continue;
+        }
         if (nnames >= cap) { cap = cap ? cap * 2 : 64; names = realloc(names, cap * sizeof *names); }
         names[nnames++] = strdup(ln);
     }
     fclose(f);
     qsort(names, nnames, sizeof *names, cmp);
     state = 2;
-    hk_log("patch v%s: %d files", ver, nnames);
+    hk_log("patch v%s: %d files, installed data %s", ver, nnames, baseBad ? "DIFFERENT" : baseN ? "matches" : "not checked");
+    if (baseBad && !warning[0])
+        snprintf(warning, sizeof warning, "This patch is for the %s CIA, and a different\n"
+                 "version is installed: reinstall the %s CIA.", HK3DS_PATCH_BASE, HK3DS_PATCH_BASE);
 }
 
 bool hk_patch_path(const char *path, char *out, size_t size) {

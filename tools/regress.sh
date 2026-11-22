@@ -14,6 +14,21 @@ check() { if eval "$2"; then echo "PASS $1"; else echo "FAIL $1"; fails=$((fails
 n=$(CHECK_ONLY=1 python3 "$H/tools/fill_gate_targets.py" "$H/romfs/rooms" "$B" | awk '{print $2}')
 check "all room exits linked ($n missing)" '[ "$n" = 0 ]'
 
+# pack_objs.py writes a fresh <Room>.obj: a room with object particle art (<Room>_pto.spr) whose .obj has no particle
+# systems was packed again without tools/obj_particles.py (Fungoons' gas went invisible that way)
+np=$(python3 - "${HK_ROMFS:-$H/romfs}/rooms" <<'EOF'
+import sys, os, glob, zlib
+d = sys.argv[1]; bad = []
+for p in glob.glob(f'{d}/*_pto.spr'):
+    o = p[:-len('_pto.spr')] + '.obj'
+    if not os.path.exists(o): continue
+    b = open(o, 'rb').read(); b = zlib.decompress(b[8:]) if b[:4] == b'HKZ1' else b
+    if b'"k":"ps"' not in b and b'"k": "ps"' not in b: bad.append(os.path.basename(o)[:-4])
+print(len(bad), ' '.join(sorted(bad)[:5]))
+EOF
+)
+check "rooms with object particle art keep their particle systems (${np})" '[ "${np%% *}" = 0 ]'
+
 run well "Town 185 4" "600:"
 check "Dirtmouth well drops into the Crossroads" 'grep -q "enter_room(Crossroads_01, top1)" $W/well/log'
 
@@ -400,6 +415,16 @@ check "the Journal pane lists the killed creatures (the Shade shares the Crawlid
 # with its scales composed per axis it came out over the shaft, black boxes around the falling Knight
 run kpfall "Tutorial_01 -1 -1" "200:" HK_MASKTRACE=1
 check "no secret mask over the opening fall" '! grep -q "^\[maskdraw\] Secret_Mask" $W/kpfall/log'
+
+# the Hunter counts the Journal (GameManager.CountJournalEntries): an unfinished one gets his usual talk, not the Mark
+run hunter "Fungus1_08 46.8 39.8" "150:;1:UP;20:;1:A;20:;1:A;20:;1:A;100:" HK_PD="metHunter,hasJournal,hunterRoared,killedCrawler"
+check "the Hunter doesn't offer his Mark for an unfinished Journal" 'grep -q "Conversation Control: Convo Choice -> Convo 1" $W/hunter/log && ! grep -q "Convo Choice -> Completed" $W/hunter/log'
+
+# a save given the Mark early (before v1.0.23) loads without it, and the Hunter's hut floor stays in place
+mkdir -p "$W/hmark/sdmc/3ds/hk3ds"; ln -s "${HK_ROMFS:-$H/romfs}" "$W/hmark/romfs"
+printf 'HK3DS2\nFungus1_08\nleft1\n5 0 0\n- 0.00 0.00 0\nF 0\nPT 0\nB hasJournal 1\nB metHunter 1\nB hasHuntersMark 1\nB killedHunterMark 1\nI killsHunterMark 0\nB hunterRewardOffered 1\nB pbi:Fungus1_08:Shiny|Item|HunterMark 1\nFungus1_08\n' > "$W/hmark/sdmc/3ds/hk3ds/save1.dat"
+(cd "$W/hmark" && env HK_FAST=1 HK_FSMTRACE=1 HK_SCRIPT="150:;1:A;40:;1:A;30:;100:" HK_OUT=shots timeout 600 "${HK_HOST:-$H/host/hk3ds_host}" > log 2>&1)
+check "an early Hunter's Mark is taken back on loading" 'grep -q "Hunter.s Mark given early" $W/hmark/sdmc/3ds/hk3ds/log.txt && ! grep -q "break_floor_grass/FSM: Check -> Destroy" $W/hmark/log'
 
 echo "$fails failed"; rm -rf "$W"
 exit $fails

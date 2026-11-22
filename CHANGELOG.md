@@ -35,6 +35,33 @@ Everything in those rooms runs the game's own scripts (PlayMaker state machines 
 - **Music**: each room's music and ambience follow the game's music cues and music regions.
 - Glow and light sprites are drawn with additive blending, like in the game.
 
+## Fixes in v1.0.24 (patch)
+- **Invisible enemy shots and effects in 42 rooms.** The Fungoons' gas, and every other particle effect on the
+  objects of 42 rooms (most of the Fungal Wastes, Mantis Village, Kingdom's Edge, the Abyss, some of the White Palace
+  and Godhome), was missing: those rooms' objects were packed again on Nov 17, and `pack_objs.py` writes a fresh
+  `<Room>.obj` without the particle systems and sprite materials `tools/obj_particles.py` adds. The shots still hit;
+  they just couldn't be seen. `obj_particles.py` has run on them again (145 particle systems in Fungus2_03 alone,
+  plus the lit and additive sprite materials), and `full_rebuild.sh` and `export_all.sh` now run it after every
+  `pack_objs.py`. The patch carries the 42 rooms' `.obj` files (and their `_pto.spr` where they changed).
+
+## Fixes in v1.0.23 (patch)
+- **The Hunter gave his Mark for an unfinished Journal.** His talk asks `GameManager.CountJournalEntries` how many
+  entries and notes are complete, and that method did nothing, so every count read as 0 of 0 and any Journal passed as
+  complete. It is now translated from the game's own `PlayerData.CountJournalEntries` (`tools/gen_journal_count.py`
+  writes `source/journal_count.c`): the Hunter goes back to his usual lines until all 146 entries are done.
+- **Stuck in the pit under his hut.** Taking the Mark early dropped you into the pit below his hut, whose only way out
+  is a shaft that needs the Mantis Claw, and with the Mark his hut's floor stays open over it. Loading a save that has
+  the Mark without a complete Journal now takes it back (the Mark, its Journal entry and the reward offer), so the
+  hut is whole again and the Hunter gives the Mark when the Journal really is complete. If you are in the pit right
+  now: Pause, Quit to Menu, Continue; you wake at your last bench.
+- **One patch zip per version.** `hk3ds_patch_v1.0.23_std.zip` for the standard CIA and `_hd.zip` for the HD one,
+  each with only its own title's folders.
+- **The patch checks the installed CIA.** A patch's code reads the installed CIA's data, so it is only made to work
+  over the CIA release it was made for (v1.0.21). Each patch's `files.txt` now lists a few room-art files of its base
+  CIA with their sizes
+  (`BASE` lines); if the installed ones differ, the title screen says to reinstall the v1.0.21 CIA, and `log.txt`
+  names the file.
+
 ## New in v1.0.22: updates as small patches
 - **No more downloading the whole game for a fix.** From v1.0.22 on, updates come as a small patch zip over the
   installed CIAs (v1.0.22 itself is under 1 MB, against 1.4 GB and 2.1 GB for the CIAs). Copy its `luma` and `3ds`
