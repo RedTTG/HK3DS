@@ -57,14 +57,15 @@ SKIP_ENEMIES = ("Mender Bug", "Grub", "Hatcher Baby", "Bench")
 
 
 @functools.lru_cache(None)
-def scene_path(name):
+def scene_path(name, quiet=False):
     exact = f"{EX}/Scenes/{name}.unity"
     if os.path.isfile(exact):
         return exact
     matches = glob.glob(f"{EX}/**/{name}.unity", recursive=True)
     if matches:
         return matches[0]
-    print(f"Cannot find scene: {name}")
+    if not quiet:
+        print(f"Cannot find scene: {name}")
     return None
 
 

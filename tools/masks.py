@@ -143,6 +143,23 @@ def hit_linked(out_dir, room, _cache={}):
 
 def export(room, out_dir):
     sp = BR.scene_path(room)
+    if not sp:
+        for ext in (".msk", "_msk.spr"):
+            path = f"{out_dir}/{room}{ext}"
+            if os.path.exists(path):
+                os.remove(path)
+        return 0
+    if sp:
+        try:
+            scene_text = open(sp, "rb").read(2_000_000).decode("utf-8", "replace")
+            if "iTweenFadeTo" not in scene_text and "msk" not in scene_text:
+                for ext in (".msk", "_msk.spr"):
+                    path = f"{out_dir}/{room}{ext}"
+                    if os.path.exists(path):
+                        os.remove(path)
+                return 0
+        except OSError:
+            pass
     roots = mask_roots(sp)
     _, items = B.collect(sp)
     # other masks (e.g. 'break_wall_masks' faded by a breakable wall's FSM): msk_* sprites outside unmasker groups.

@@ -24,7 +24,9 @@ KNIGHT_ATLAS = os.environ.get(
     "KNIGHT_ATLAS", f"{ROOT}/hs/Texture2D/atlas0_325.png"
 )
 
-def load_yaml_docs(path):
+@functools.lru_cache(maxsize=128)
+def _load_yaml_docs_cached(path, size, mtime_ns):
+    del size, mtime_ns
     src = open(path, encoding="utf-8").read()
     parts = re.split(r"^--- !u!(\d+) &(-?\d+).*$", src, flags=re.M)
     objs = {}
@@ -37,6 +39,14 @@ def load_yaml_docs(path):
             ((typ, val),) = d.items()
             objs[int(parts[i + 1])] = (typ, val)
     return objs
+
+
+def load_yaml_docs(path):
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return {}
+    return _load_yaml_docs_cached(path, stat.st_size, stat.st_mtime_ns)
 
 
 @functools.lru_cache(None)

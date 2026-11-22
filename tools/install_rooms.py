@@ -8,7 +8,6 @@ import subprocess
 import sys
 import traceback
 import time
-import threading
 import tempfile
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
@@ -16,7 +15,9 @@ from pathlib import Path
 from parallel_helpers import interruptible_main, parallel_executor
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import camlocks
 import lyr_v2
+import masks
 import patch_room_audio
 import zwrap
 
@@ -90,24 +91,20 @@ def install_one(room, room_build, romfs, tools, status_dir, index):
             zwrap.wrap_file(str(path))
 
     phase("camera post-processing")
-    camlocks_result = run(
-        [sys.executable, str(tools / "camlocks.py"), str(romfs_rooms), room],
-        cwd=tools,
-    )
-    if camlocks_result.stdout.strip():
-        output.append(camlocks_result.stdout.strip())
-    if camlocks_result.returncode:
-        return index, room, False, "\n".join(output)
+    try:
+        camlocks.export(room, str(romfs_rooms), quiet=True)
+    except Exception as error:
+        return index, room, False, "".join(
+            traceback.format_exception(type(error), error, error.__traceback__)
+        )
 
     phase("mask post-processing")
-    masks_result = run(
-        [sys.executable, str(tools / "masks.py"), str(romfs_rooms), room],
-        cwd=tools,
-    )
-    if masks_result.stdout.strip():
-        output.append(masks_result.stdout.strip())
-    if masks_result.returncode:
-        return index, room, False, "\n".join(output)
+    try:
+        masks.export(room, str(romfs_rooms))
+    except Exception as error:
+        return index, room, False, "".join(
+            traceback.format_exception(type(error), error, error.__traceback__)
+        )
 
     mask_sheet = romfs_rooms / f"{room}_msk.spr"
     if mask_sheet.is_file():
@@ -134,10 +131,9 @@ def main():
     failures = []
     status_dir = tools.parent / "work" / "logs" / "install"
     status_dir.mkdir(parents=True, exist_ok=True)
-    progress_lock = threading.Lock()
-    started = time.monotonic()
     completed_count = 0
     terminal_width = shutil.get_terminal_size((80, 20)).columns
+    future_started = {}
 
     def report_progress(index, room, ok, output):
         nonlocal completed_count
@@ -145,14 +141,17 @@ def main():
         atomic_write(room_log, output + ("\n" if output else ""))
         status = "OK" if ok else "FAILED"
         atomic_write(status_dir / f"{room}.status", status + "\n")
-        with progress_lock:
-            completed_count += 1
-            elapsed = time.monotonic() - started
-            line = (
-                f"[install {completed_count}/{len(args.rooms)}]"
-                f" {room}: {status} ({elapsed:.1f}s)"
-            )
-            print(line[:terminal_width], flush=True)
+        completed_count += 1
+        room_elapsed = (
+            time.monotonic() - future_started.pop(room)
+            if room in future_started
+            else 0.0
+        )
+        line = (
+            f"[install {completed_count}/{len(args.rooms)}]"
+            f" {room}: {status} ({room_elapsed:.1f}s)"
+        )
+        print(line[:terminal_width], flush=True)
 
     with parallel_executor(
         ThreadPoolExecutor,
@@ -183,6 +182,7 @@ def main():
                 index,
             )
             futures[future] = (index, room)
+            future_started[room] = time.monotonic()
             atomic_write(status_dir / f"{room}.status", "RUNNING\n")
             atomic_write(status_dir / f"{room}.log", "running\n")
             # print(f"== {room}", flush=True)

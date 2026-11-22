@@ -17,8 +17,13 @@ Outputs (in out_dir):
 Coordinates: 1 unit = 1 tile (HK uses 64 px per unit). Origin bottom-left, y up,
 exactly like Unity. Convert to screen with:  sy = (ROOM_H - y) * TILE_PX
 """
-import re, sys, os, json, math, struct
+import re, sys, os, json, math, struct, functools
 from collections import defaultdict
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from hkcommon import load_yaml_docs as _shared_load_yaml_docs
+except Exception:
+    _shared_load_yaml_docs = None
 
 try:
     import yaml
@@ -29,7 +34,9 @@ except ImportError:
 
 
 # ---------------------------------------------------------------- load scene
-def load_scene(path):
+@functools.lru_cache(maxsize=128)
+def _load_scene_cached(path, size, mtime_ns):
+    del size, mtime_ns
     src = open(path, encoding="utf-8").read()
     parts = re.split(r"^--- !u!(\d+) &(-?\d+).*$", src, flags=re.M)
     objs = {}
@@ -42,6 +49,16 @@ def load_scene(path):
             ((typ, val),) = d.items()
             objs[int(parts[i + 1])] = (typ, val)
     return objs
+
+
+def load_scene(path):
+    if _shared_load_yaml_docs is not None:
+        return _shared_load_yaml_docs(path)
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return {}
+    return _load_scene_cached(path, stat.st_size, stat.st_mtime_ns)
 
 
 def f3(d):

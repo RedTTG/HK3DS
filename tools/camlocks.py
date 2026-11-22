@@ -53,13 +53,34 @@ def zones(scene_path):
     return out
 
 
-def export(room, out_dir):
-    scene = BR.scene_path(room)
+def export(room, out_dir, quiet=False):
+    scene = BR.scene_path(room, quiet=True)
     if not scene:
         print(room, "no scene")
         return 0
+    try:
+        if "cameraXMin" not in open(scene, "rb").read(2_000_000).decode("utf-8", "replace"):
+            scene_text = ""
+            boss = BR.scene_path(room + "_boss", quiet=True)
+            if boss:
+                boss_text = open(boss, "rb").read(2_000_000).decode("utf-8", "replace")
+                if "cameraXMin" not in boss_text:
+                    lock_zones = []
+                    with open(f"{out_dir}/{room}.cam", "w") as handle:
+                        pass
+                    if not quiet:
+                        print(room, 0, "lock zones")
+                    return 0
+            else:
+                with open(f"{out_dir}/{room}.cam", "w") as handle:
+                    pass
+                if not quiet:
+                    print(room, 0, "lock zones")
+                return 0
+    except OSError:
+        pass
     lock_zones = zones(scene)
-    boss = BR.scene_path(room + "_boss")
+    boss = BR.scene_path(room + "_boss", quiet=True)
     if boss:
         lock_zones += zones(boss)
     with open(f"{out_dir}/{room}.cam", "w") as handle:
@@ -72,7 +93,8 @@ def export(room, out_dir):
                 )
                 + "\n"
             )
-    print(room, len(lock_zones), "lock zones")
+    if not quiet:
+        print(room, len(lock_zones), "lock zones")
     return len(lock_zones)
 
 
