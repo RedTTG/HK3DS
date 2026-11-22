@@ -1,8 +1,17 @@
 # Shared helpers for reading the AssetRipper export of Hollow Knight.
 import re, os, glob, pickle, math, functools
+from pathlib import Path
+
 import yaml
+from dotenv import load_dotenv
+root_folder = Path(__file__).parent.parent
+
+if (env_file := (root_folder / '.env')).exists():
+    load_dotenv(env_file)
+
 Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
-ROOT = os.environ.get('HKDATA', 'hkdata')
+ROOT = Path(os.environ.get('HKDATA', 'hkdata'))
+ROOT = (ROOT if ROOT.is_absolute() else root_folder / ROOT).relative_to(root_folder).as_posix()
 if not os.path.exists(ROOT):
     raise Exception(f'HKData not found at {ROOT}')
 EX = f'{ROOT}/ex'
