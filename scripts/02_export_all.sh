@@ -1,8 +1,19 @@
 #!/bin/bash
 # Re-export and pack the live objects (enemies, NPCs, interactables) of every room.
-#   tools/export_all.sh <objdir> <romfs> <room list file>
-OBJ=$1; ROMFS=$2; LIST=$3
-cd "$(dirname "$0")"
+#   scripts/02_export_all.sh [--build DIR]
+H=$(cd "$(dirname "$0")/.." && pwd); T=$H/tools
+BUILD=$H/build
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --build) BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${2:?usage: export_all.sh [--build DIR]}"); shift 2 ;;
+    --build=*) BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${1#*=}"); shift ;;
+    *) echo "usage: export_all.sh [--build DIR]" >&2; exit 2 ;;
+  esac
+done
+OBJ=$BUILD/objs
+ROMFS=$BUILD/romfs
+LIST=$H/tools/data/all_rooms.txt
+cd "$T"
 mkdir -p "$OBJ"
 for r in $(cat "$LIST"); do
   nice python3 build_objs.py "$OBJ" "$r" 2>&1 | tail -1

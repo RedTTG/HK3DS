@@ -69,11 +69,17 @@ cues), `script_guids.json` and `cs_sigs.json` (which game script each component 
 `python tools/fsm_templates.py`.
 
 ### 2. Convert the game into `romfs/`
-`tools/full_rebuild.sh <objdir> <build dir> romfs tools/data/all_rooms.txt` runs the whole room conversion; its steps are:
+Run `scripts/01_index_hkdata.sh [--hkdata hkdata]` once after exporting HKDATA. It deletes every generated `.pkl` under
+HKDATA, clears the generated JSON lookup maps, and rebuilds the export, audio, C# signature, script GUID, FSM template,
+texture, animation, and `.meta` indexes.
+
+`scripts/03_full_rebuild.sh [--build build]` runs the whole room conversion. The build directory defaults to `build/`; objects,
+room build outputs and the ROM filesystem are stored at `build/objs/`, `build/`, and `build/romfs/`. The room list comes
+from `tools/data/all_rooms.txt`. Its steps are:
 1. `python tools/build_objs.py <objdir> <Room...>`: every live object in a scene (NPCs, enemies, interactables, their
    PlayMaker FSMs, components, the prefabs they spawn, sounds).
 2. `python tools/build_room.py <out_dir> <Room>`: collision, transitions, entities and the baked parallax art layers.
-3. `tools/install_rooms.sh <out_dir> romfs <Room...>` copies and compresses the room files and exports the secret
+3. `scripts/04_install_rooms.sh [--build build] [Room...]` copies and compresses the room files and exports the secret
    masks (`tools/masks.py`); `python tools/pack_objs.py <objdir> romfs <Room...>` writes `<Room>.obj` and
    `<Room>_objs.spr` and converts the sounds; then `python tools/obj_particles.py romfs <Room...>` adds the objects'
    particle systems and sprite materials to that `<Room>.obj` (run it again after every `pack_objs.py`: enemy shots
@@ -129,7 +135,7 @@ gcc -O2 -w -Ihost -Isource -D__HOST__ source/*.c host/host.c -lm -lpthread -o ho
 HK_SCRIPT="150:;1:A;40:;1:A;200:RIGHT" HK_SHOTS="300" ./host/hk3ds_host     # -> shots/f00300.png
 HK_START="Crossroads_10 -1 -1" ./host/hk3ds_host                             # start a new game in any room
 ```
-`tools/regress.sh` runs the regression scenes. `tools/emu/` has a libretro front end (`hkrec.c`) that runs the real
+`scripts/05_regress.sh [--build build]` runs the regression scenes. `tools/emu/` has a libretro front end (`hkrec.c`) that runs the real
 `.3dsx` in the Azahar core with scripted input and records video and sound (`HK_REC_LEN` starts when a room fades in).
 Azahar's software renderer shows only half of the New 3DS's 800-pixel wide mode; `tools/emu/azahar-wide-mode.patch`
 fixes that for HD recordings.

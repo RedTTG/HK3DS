@@ -1,9 +1,24 @@
 #!/bin/bash
 # Copy freshly built rooms (build_room.py output) into romfs and finish them: HKL2 layers, zlib wrapping, camera locks,
-# secret masks.   tools/install_rooms.sh <build dir> <romfs> Room [Room ...]
-B=$1; R=$2; shift 2
-cd "$(dirname "$0")"
-for r in "$@"; do
+# secret masks.   scripts/04_install_rooms.sh [--build DIR] [Room ...]
+H=$(cd "$(dirname "$0")/.." && pwd); T=$H/tools
+BUILD=$H/build
+ROOMS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --build) BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${2:?usage: install_rooms.sh [--build DIR] [ROOM...]}"); shift 2 ;;
+    --build=*) BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${1#*=}"); shift ;;
+    *) ROOMS+=("$1"); shift ;;
+  esac
+done
+B=$BUILD
+R=$BUILD/romfs
+if [ "${#ROOMS[@]}" -eq 0 ]; then
+  mapfile -t ROOMS < "$H/tools/data/all_rooms.txt"
+fi
+cd "$T"
+mkdir -p "$R/rooms"
+for r in "${ROOMS[@]}"; do
   [ -f "$B/$r.room" ] && python3 patch_room_audio.py "$B" "$r" >/dev/null
   for ext in .room .lyr _ents.spr _enemies.spr; do
     [ -f "$B/$r$ext" ] && cp "$B/$r$ext" "$R/rooms/"
@@ -18,4 +33,4 @@ done
 # a room built on its own only links exits to rooms built with it: relink every exit to the installed rooms
 python3 fill_gate_targets.py "$R/rooms" "$B" | tail -1
 # exits the game hides by PlayerData (the Grimm Troupe tents...) only work while their object would be shown
-python3 patch_gate_conditions.py "$R/rooms" "$@" | tail -1
+python3 patch_gate_conditions.py "$R/rooms" "${ROOMS[@]}" | tail -1

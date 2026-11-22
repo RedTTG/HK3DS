@@ -1,22 +1,33 @@
 #!/bin/bash
 # Regression tests on the PC build (host/hk3ds_host): every one must pass before a release.
-#   tools/regress.sh [build dir with <Room>.json transitions]       (prints PASS / FAIL per test)
-H=$(cd "$(dirname "$0")/.." && pwd); B=${1:?usage: regress.sh BASELINE_DIR (a folder of earlier results to compare with)}; W=$(mktemp -d)
+#   scripts/05_regress.sh [--build DIR]                             (prints PASS / FAIL per test)
+H=$(cd "$(dirname "$0")/.." && pwd)
+BUILD=$H/build
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --build) BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${2:?usage: regress.sh [--build DIR]}"); shift 2 ;;
+    --build=*) BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${1#*=}"); shift ;;
+    *) echo "usage: regress.sh [--build DIR]" >&2; exit 2 ;;
+  esac
+done
+B=$BUILD
+ROMFS=$BUILD/romfs
+W=$(mktemp -d)
 fails=0
 run() {   # run <name> <HK_START> <script> [extra env...]: leaves the log in $W/<name>/log
   local n=$1 st=$2 sc=$3; shift 3
-  rm -rf "$W/$n"; mkdir -p "$W/$n"; ln -s "${HK_ROMFS:-$H/romfs}" "$W/$n/romfs"
+  rm -rf "$W/$n"; mkdir -p "$W/$n"; ln -s "${HK_ROMFS:-$ROMFS}" "$W/$n/romfs"
   (cd "$W/$n" && env HK_FAST=1 HK_FSMTRACE=1 HK_START="$st" HK_SCRIPT="150:;1:A;40:;1:A;30:;$sc" HK_OUT=shots "$@" timeout 600 "${HK_HOST:-$H/host/hk3ds_host}" > log 2>&1)
 }
 check() { if eval "$2"; then echo "PASS $1"; else echo "FAIL $1"; fails=$((fails+1)); fi; }
 
 # exits: every gate whose destination is installed has its target
-n=$(CHECK_ONLY=1 python3 "$H/tools/fill_gate_targets.py" "$H/romfs/rooms" "$B" | awk '{print $2}')
+n=$(CHECK_ONLY=1 python3 "$H/tools/fill_gate_targets.py" "$ROMFS/rooms" "$B" | awk '{print $2}')
 check "all room exits linked ($n missing)" '[ "$n" = 0 ]'
 
 # pack_objs.py writes a fresh <Room>.obj: a room with object particle art (<Room>_pto.spr) whose .obj has no particle
 # systems was packed again without tools/obj_particles.py (Fungoons' gas went invisible that way)
-np=$(python3 - "${HK_ROMFS:-$H/romfs}/rooms" <<'EOF'
+np=$(python3 - "${HK_ROMFS:-$ROMFS}/rooms" <<'EOF'
 import sys, os, glob, zlib
 d = sys.argv[1]; bad = []
 for p in glob.glob(f'{d}/*_pto.spr'):
@@ -115,7 +126,7 @@ run townground "Town 40 11" "300:" HK_SHOTS=500 HK_OUT=shots HK_GOD=1
 check "Dirtmouth's ground under the walkway is black" '[ "$(python3 -c "from PIL import Image; im=Image.open(\"$W/townground/shots/f00500.png\").crop((0,220,400,240)).convert(\"L\"); d=list(im.getdata()); print(int(sum(d)/len(d) < 8))")" = 1 ]'
 
 # the Knight's light and spell effects (faint additive glows) stay 8-bit: at 4 bits the light around him shows hard rings
-check "Knight effects page is full colour" '[ "$(python3 -c "import zlib,struct; d=open(\"$H/romfs/rooms/_Knight_objs.spr\",\"rb\").read(); d=zlib.decompress(d[8:]) if d[:4]==b\"HKZ1\" else d; print(struct.unpack_from(\"<B\",d,16)[0]&0x7f)")" = 0 ]'
+check "Knight effects page is full colour" '[ "$(python3 -c "import zlib,struct; d=open(\"$ROMFS/rooms/_Knight_objs.spr\",\"rb\").read(); d=zlib.decompress(d[8:]) if d[:4]==b\"HKZ1\" else d; print(struct.unpack_from(\"<B\",d,16)[0]&0x7f)")" = 0 ]'
 
 # Elder Baldur: while open it spits goop (the projectile is picked with SetGameObject from a prefab)
 run blocker "Crossroads_ShamanTemple 60 23" "500:" HK_SPAWNDBG=1
@@ -140,7 +151,7 @@ run goam "Crossroads_13 45.5 9" "60:;20:LEFT;300:" HK_TRACE=1
 check "Goam hurts the Knight" 'grep "^t=" $W/goam/log | tail -1 | grep -qv "hp=5 "'
 
 # Grubfather's room: the saved grubs sit at their holes' depth and the Grubfather is drawn (not behind the wall layer)
-check "saved grubs at their holes' depth" '[ "$(python3 -c "import sys; sys.path.insert(0,\"$H/tools\"); from merge_obj_update import load_obj; t=load_obj(\"$H/romfs/rooms/Crossroads_38.obj\"); print(min(float(o.get(\"z\",0)) for o in t[\"objects\"] if o.get(\"p\")==-1 and o[\"n\"].startswith(\"Grub Saved\")) > 1)")" = True ]'
+check "saved grubs at their holes' depth" '[ "$(python3 -c "import sys; sys.path.insert(0,\"$H/tools\"); from merge_obj_update import load_obj; t=load_obj(\"$ROMFS/rooms/Crossroads_38.obj\"); print(min(float(o.get(\"z\",0)) for o in t[\"objects\"] if o.get(\"p\")==-1 and o[\"n\"].startswith(\"Grub Saved\")) > 1)")" = True ]'
 run gf "Crossroads_38 30 6" "300:" HK_SHOTS=400
 run gf_hidden "Crossroads_38 30 6" "300:" HK_SHOTS=400 HK_HIDEOBJ="Grub King"
 check "Grubfather visible" '[ "$(python3 -c "from PIL import Image, ImageChops; A=Image.open(\"$W/gf/shots/f00400.png\"); k=(A.width-320)//400; r=(280*k,30,340*k,90); a=A.crop(r).convert(\"L\"); b=Image.open(\"$W/gf_hidden/shots/f00400.png\").crop(r).convert(\"L\"); d=list(ImageChops.difference(a,b).getdata()); print(int(sum(d)/len(d) > 3))" 2>/dev/null)" = 1 ]'
@@ -316,7 +327,7 @@ check "geo collected" 'grep "^t=" $W/geo/log | tail -1 | grep -qv "geo=0 "'
 run kpwall "Tutorial_01 40 12" "8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;8:RIGHT;2:RIGHT+Y;4:RIGHT;" HK_GOD=1 HK_SNDTRACE=1
 check "a broken wall makes its sound" 'grep -q "^\[snd [0-9]*\] breakable_wall_hit_1" $W/kpwall/log'
 check "breaking Tute Door 1 uncovers the passage behind it" 'grep -q "\[mask\] HIT uncovers Tut_msk_03" $W/kpwall/log'
-check "King's Pass has its black covers" '[ -f $H/romfs/rooms/Tutorial_01.msk ] && grep -q "^G .* Secret_Mask " $H/romfs/rooms/Tutorial_01.msk'
+check "King's Pass has its black covers" '[ -f $ROMFS/rooms/Tutorial_01.msk ] && grep -q "^G .* Secret_Mask " $ROMFS/rooms/Tutorial_01.msk'
 
 # a flying enemy's corpse bursts when it hits the ground (Corpse.breaker -> Smash), with a splat
 run flyer "Fungus1_02 28.9 43" "600:" HK_GOD=1 HK_KILLALL=60 HK_SNDTRACE=1
@@ -421,7 +432,7 @@ run hunter "Fungus1_08 46.8 39.8" "150:;1:UP;20:;1:A;20:;1:A;20:;1:A;100:" HK_PD
 check "the Hunter doesn't offer his Mark for an unfinished Journal" 'grep -q "Conversation Control: Convo Choice -> Convo 1" $W/hunter/log && ! grep -q "Convo Choice -> Completed" $W/hunter/log'
 
 # a save given the Mark early (before v1.0.23) loads without it, and the Hunter's hut floor stays in place
-mkdir -p "$W/hmark/sdmc/3ds/hk3ds"; ln -s "${HK_ROMFS:-$H/romfs}" "$W/hmark/romfs"
+mkdir -p "$W/hmark/sdmc/3ds/hk3ds"; ln -s "${HK_ROMFS:-$ROMFS}" "$W/hmark/romfs"
 printf 'HK3DS2\nFungus1_08\nleft1\n5 0 0\n- 0.00 0.00 0\nF 0\nPT 0\nB hasJournal 1\nB metHunter 1\nB hasHuntersMark 1\nB killedHunterMark 1\nI killsHunterMark 0\nB hunterRewardOffered 1\nB pbi:Fungus1_08:Shiny|Item|HunterMark 1\nFungus1_08\n' > "$W/hmark/sdmc/3ds/hk3ds/save1.dat"
 (cd "$W/hmark" && env HK_FAST=1 HK_FSMTRACE=1 HK_SCRIPT="150:;1:A;40:;1:A;30:;100:" HK_OUT=shots timeout 600 "${HK_HOST:-$H/host/hk3ds_host}" > log 2>&1)
 check "an early Hunter's Mark is taken back on loading" 'grep -q "Hunter.s Mark given early" $W/hmark/sdmc/3ds/hk3ds/log.txt && ! grep -q "break_floor_grass/FSM: Check -> Destroy" $W/hmark/log'
