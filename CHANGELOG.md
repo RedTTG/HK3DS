@@ -35,6 +35,15 @@ Everything in those rooms runs the game's own scripts (PlayMaker state machines 
 - **Music**: each room's music and ambience follow the game's music cues and music regions.
 - Glow and light sprites are drawn with additive blending, like in the game.
 
+## Fixes in v1.0.24 (patch)
+- **Invisible enemy shots and effects in 42 rooms.** The Fungoons' gas, and every other particle effect on the
+  objects of 42 rooms (most of the Fungal Wastes, Mantis Village, Kingdom's Edge, the Abyss, some of the White Palace
+  and Godhome), was missing: those rooms' objects were packed again on Nov 17, and `pack_objs.py` writes a fresh
+  `<Room>.obj` without the particle systems and sprite materials `tools/obj_particles.py` adds. The shots still hit;
+  they just couldn't be seen. `obj_particles.py` has run on them again (145 particle systems in Fungus2_03 alone,
+  plus the lit and additive sprite materials), and `full_rebuild.sh` and `export_all.sh` now run it after every
+  `pack_objs.py`. The patch carries the 42 rooms' `.obj` files (and their `_pto.spr` where they changed).
+
 ## Fixes in v1.0.23 (patch)
 - **The Hunter gave his Mark for an unfinished Journal.** His talk asks `GameManager.CountJournalEntries` how many
   entries and notes are complete, and that method did nothing, so every count read as 0 of 0 and any Journal passed as

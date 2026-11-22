@@ -75,7 +75,9 @@ cues), `script_guids.json` and `cs_sigs.json` (which game script each component 
 2. `python tools/build_room.py <out_dir> <Room>`: collision, transitions, entities and the baked parallax art layers.
 3. `tools/install_rooms.sh <out_dir> romfs <Room...>` copies and compresses the room files and exports the secret
    masks (`tools/masks.py`); `python tools/pack_objs.py <objdir> romfs <Room...>` writes `<Room>.obj` and
-   `<Room>_objs.spr` and converts the sounds.
+   `<Room>_objs.spr` and converts the sounds; then `python tools/obj_particles.py romfs <Room...>` adds the objects'
+   particle systems and sprite materials to that `<Room>.obj` (run it again after every `pack_objs.py`: enemy shots
+   such as the Fungoons' gas are only particles).
 4. Game-wide data: `tools/build_knight.py` (the Knight's state machines), `build_sprites.py`, `build_ui.py`,
    `build_map.py`, `build_music.py`, `build_journal.py`, `text_sheets.py`, `darkness.py`, `pantheons.py`,
    `gg_doors.py`, `build_vignette.py`.

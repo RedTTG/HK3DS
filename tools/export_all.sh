@@ -10,5 +10,7 @@ done
 for r in $(cat "$LIST"); do
   nice python3 pack_objs.py "$OBJ" "$ROMFS" "$r" 2>&1 | grep -v "^  " | tail -1
   [ -f "$ROMFS/rooms/${r}_objs.spr" ] && python3 zwrap.py "$ROMFS/rooms/${r}_objs.spr" >/dev/null
+  # pack_objs writes a fresh <Room>.obj: put its particle systems and sprite materials back (obj_particles.py)
+  nice python3 obj_particles.py "$ROMFS" "$r" 2>&1 | grep -v "^wrote" | tail -1
 done
 echo ALLDONE

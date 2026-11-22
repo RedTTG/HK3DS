@@ -14,6 +14,21 @@ check() { if eval "$2"; then echo "PASS $1"; else echo "FAIL $1"; fails=$((fails
 n=$(CHECK_ONLY=1 python3 "$H/tools/fill_gate_targets.py" "$H/romfs/rooms" "$B" | awk '{print $2}')
 check "all room exits linked ($n missing)" '[ "$n" = 0 ]'
 
+# pack_objs.py writes a fresh <Room>.obj: a room with object particle art (<Room>_pto.spr) whose .obj has no particle
+# systems was packed again without tools/obj_particles.py (Fungoons' gas went invisible that way)
+np=$(python3 - "${HK_ROMFS:-$H/romfs}/rooms" <<'EOF'
+import sys, os, glob, zlib
+d = sys.argv[1]; bad = []
+for p in glob.glob(f'{d}/*_pto.spr'):
+    o = p[:-len('_pto.spr')] + '.obj'
+    if not os.path.exists(o): continue
+    b = open(o, 'rb').read(); b = zlib.decompress(b[8:]) if b[:4] == b'HKZ1' else b
+    if b'"k":"ps"' not in b and b'"k": "ps"' not in b: bad.append(os.path.basename(o)[:-4])
+print(len(bad), ' '.join(sorted(bad)[:5]))
+EOF
+)
+check "rooms with object particle art keep their particle systems (${np})" '[ "${np%% *}" = 0 ]'
+
 run well "Town 185 4" "600:"
 check "Dirtmouth well drops into the Crossroads" 'grep -q "enter_room(Crossroads_01, top1)" $W/well/log'
 
