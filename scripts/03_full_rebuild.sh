@@ -19,7 +19,8 @@ FB=$BUILD
 ROMFS=$BUILD/romfs
 LIST=$H/tools/data/all_rooms.txt
 cd "$T"
-mkdir -p "$OBJ" "$FB"
+rm -rf "$T/data/uoroots"
+mkdir -p "$T/data/uoroots" "$OBJ" "$FB"
 case "$PH" in *objects*) echo "== objects"
 for r in $(cat "$LIST"); do nice python3 build_objs.py "$OBJ" "$r" 2>&1 | tail -1; done ;; esac
 case "$PH" in *rooms*) echo "== rooms"

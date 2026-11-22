@@ -48,7 +48,50 @@ rm -f \
   "$T/data/audio_map.json" \
   "$T/data/script_guids.json" \
   "$T/data/cs_sigs.json" \
-  "$T/data/fsm_templates.json"
+  "$T/data/fsm_templates.json" \
+  "$T/data/all_rooms.txt"
+rm -rf "$T/data/uoroots"
+mkdir -p "$T/data"
+
+echo "== make room list"
+HKDATA="$HKDATA" python3 - <<'PY'
+import os
+from pathlib import Path
+
+hkdata = Path(os.environ["HKDATA"])
+scene_dir = hkdata / "ex" / "Scenes"
+excluded = {
+    "BetaEnd",
+    "Cinematic_Ending_A",
+    "Cinematic_Ending_B",
+    "Cinematic_Ending_C",
+    "Cinematic_Ending_D",
+    "Cinematic_Ending_E",
+    "Cinematic_MrMushroom",
+    "Cinematic_Stag_travel",
+    "Cutscene_Boss_Door",
+    "End_Credits",
+    "End_Game_Completion",
+    "Knight_Pickup",
+    "Menu_Credits",
+    "Menu_Title",
+    "Opening_Sequence",
+    "PermaDeath",
+    "PermaDeath_Unlock",
+    "Pre_Menu_Intro",
+    "Quit_To_Menu",
+    "_test_cocoon_1",
+    "_test_cocoon_2",
+}
+rooms = sorted({
+    path.stem
+    for path in scene_dir.rglob("*.unity")
+    if path.stem not in excluded
+})
+output = Path("tools/data/all_rooms.txt")
+output.write_text("".join(room + "\n" for room in rooms), encoding="utf-8")
+print(f"Wrote {output}: {len(rooms)} rooms")
+PY
 
 run_timed "index export" env HKDATA="$HKDATA" python3 "$T/index_export.py" "$HKDATA" --workers "$WORKERS"
 

@@ -126,16 +126,14 @@ step_check() {
 
 step_index() {
   # indexes of the export the converters read (written into $HKDATA)
-  ( cd "$T" && "$PY" index_export.py && "$PY" alpha_cache.py && "$PY" match_textures.py --all ) || return 1
-  # the caches the converters would otherwise make on first use, made here once
-  ( cd "$T" && "$PY" -c "import hkcommon as H, uanim
-for f in ('AudioClip', 'GameObject', 'Material', 'MonoBehaviour', 'Sprite', 'Texture2D'): print(f, len(H.metamap(f)))
-uanim.index()" ) || return 1
+  "$TOP/scripts/01_index_hkdata.sh" --hkdata "$HKDATA" --workers "$JOBS" || return 1
 }
 
 step_objects() {
   # every room's live objects: enemies, NPCs, interactables, their state machines and the prefabs they spawn;
   # and the Knight's own (build_knight.py)
+  rm -rf "$T/data/uoroots"
+  mkdir -p "$T/data/uoroots"
   ( cd "$T" && "$PY" build_knight.py "$W/obj" ) || return 1
   run_rooms objects "$PY" "$T/build_objs.py" "$W/obj"
 }

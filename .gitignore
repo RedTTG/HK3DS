@@ -32,3 +32,8 @@ __pycache__/
 /.idea/
 /.env
 /tools/data/fsm_templates.json
+/tools/data/all_rooms.txt
+/tools/data/audio_map.json
+/tools/data/cs_sigs.json
+/tools/data/script_guids.json
+/tools/data/uoroots/

@@ -14,6 +14,8 @@ OBJ=$BUILD/objs
 ROMFS=$BUILD/romfs
 LIST=$H/tools/data/all_rooms.txt
 cd "$T"
+rm -rf "$T/data/uoroots"
+mkdir -p "$T/data/uoroots"
 mkdir -p "$OBJ"
 for r in $(cat "$LIST"); do
   nice python3 build_objs.py "$OBJ" "$r" 2>&1 | tail -1
