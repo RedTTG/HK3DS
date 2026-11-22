@@ -7,11 +7,7 @@ the export's ex/):
 (uanim.py and match_textures.py / alpha_cache.py build their own caches the first time they run.)
    python index_export.py [out_dir]       (default: HKDATA)"""
 import os, re, sys, glob, pickle
-
-ROOT = os.environ.get('HKDATA', 'hkdata')
-EX = f'{ROOT}/ex'
-if not os.path.exists(ROOT):
-    raise Exception(f'HKData not found at {ROOT}')
+from hkcommon import ROOT, EX
 
 def guid_of(meta):
     m = re.search(r'^guid: ([0-9a-f]+)', open(meta, errors='replace').read(4000), re.M)
