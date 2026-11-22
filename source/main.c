@@ -17,10 +17,45 @@
 
 typedef enum { ST_MENU, ST_FADE_TO_GAME, ST_GAME } State;
 
+// the game data (v1.1): the data file on the SD card, mounted as romfs:/; else the program's own RomFS (a full CIA or
+// .3dsx with the data inside). Returns where it came from, or NULL when neither has it.
+static const char *data_mount(void) {
+#ifdef __HOST__
+    romfsInit(); return "romfs/";
+#else
+    struct stat st;
+    Handle fh;
+    if (R_SUCCEEDED(FSUSER_OpenFileDirectly(&fh, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
+                                            fsMakePath(PATH_ASCII, "/3ds/hk3ds/" HK3DS_DATAFILE), FS_OPEN_READ, 0))) {
+        if (R_SUCCEEDED(romfsMountFromFile(fh, 0, "romfs"))) {
+            if (stat("romfs:/gfx/ui.spr", &st) == 0) return "SD:/3ds/hk3ds/" HK3DS_DATAFILE;
+            romfsUnmount("romfs");        // not a data file of this game (a broken copy): try the program's own
+        } else FSFILE_Close(fh);
+    }
+    if (R_SUCCEEDED(romfsMountSelf("romfs"))) {
+        if (stat("romfs:/gfx/ui.spr", &st) == 0) return "the program's own RomFS";
+        romfsUnmount("romfs");
+    }
+    return NULL;
+#endif
+}
+
 int main(int argc, char **argv) {
     osSetSpeedupEnable(true);     // New 3DS: 804 MHz
-    romfsInit();
+    const char *dataSrc = data_mount();
     gfxInitDefault();
+#ifndef __HOST__
+    if (!dataSrc) {     // the small CIA / .3dsx without its data file
+        consoleInit(GFX_TOP, NULL);
+        printf("\n  Hollow Knight 3DS" HK3DS_EDITION " v" HK3DS_VERSION "\n\n"
+               "  The game data is missing. Copy\n\n    " HK3DS_DATAFILE "\n\n  into the folder\n\n    SD:/3ds/hk3ds/\n\n"
+               "  (it comes in the same download as\n  this game), then start it again.\n\n"
+               "  Already there? Check its name: it\n  must be exactly " HK3DS_DATAFILE ".\n\n"
+               "  Press START to exit.\n");
+        while (aptMainLoop()) { hidScanInput(); if (hidKeysDown() & KEY_START) break; gspWaitForVBlank(); }
+        gfxExit(); return 0;
+    }
+#endif
 #ifdef HK_HD
 #ifndef __HOST__
     { bool n3 = false; APT_CheckNew3DS(&n3);
@@ -52,6 +87,7 @@ int main(int argc, char **argv) {
     hk_patch_init();     // a data patch on the SD card for this version (patch.c)
 #ifndef __HOST__
     hk_log("boot v" HK3DS_VERSION HK3DS_EDITION ": heap %luK linear %luK", (unsigned long)(envGetHeapSize() / 1024), (unsigned long)(envGetLinearHeapSize() / 1024));
+    hk_log("game data: %s", dataSrc);
     { bool n3ds = false; APT_CheckNew3DS(&n3ds);
       // an Old 3DS (64 MB for everything), or a New 3DS that started the game with less than the CIA's 124 MB (a .3dsx
       // from a launcher running in 80 or 96 MB, a memory-hungry plugin): 16-bit sprite pages and leaner caches. The

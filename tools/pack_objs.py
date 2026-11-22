@@ -30,9 +30,12 @@ def convert_audio(names, sfxdir):
         out = f'{sfxdir}/{nm}.pcm'
         if os.path.exists(out) or nm not in am: continue
         src = f'{EX}/AudioClip/{am[nm]}'
-        r = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', src, '-ac', '1', '-ar', '22050', '-f', 's16le', out])
-        if r.returncode == 0: n += 1
-        else: sys.exit(f'ffmpeg could not convert {src}')
+        tmp = f'{out}.{os.getpid()}.tmp'     # rooms packed side by side (build.sh --jobs) can share a sound: write, then rename
+        r = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', src, '-ac', '1', '-ar', '22050', '-f', 's16le', tmp])
+        if r.returncode == 0: os.replace(tmp, out); n += 1
+        else:
+            if os.path.exists(tmp): os.remove(tmp)
+            sys.exit(f'ffmpeg could not convert {src}')
     return n
 
 def drop_skipped_roots(tree):

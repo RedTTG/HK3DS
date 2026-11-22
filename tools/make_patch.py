@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""A patch over the installed CIAs, so players don't download the whole game again:
-  luma/titles/<title id>/code.bin + exheader.bin   the new game code (Luma3DS "Enable game patching")
-  3ds/hk3ds/patch/<std|hd>/...                     data files changed since the CIA release, and files.txt
-Patches are cumulative: each one holds everything changed since the base CIAs, so only the newest is needed.
-One zip per edition (standard, HD), each with only its own title.
+"""Updates, so players don't download the whole game again. One zip per edition (standard, HD).
+From v1.1 (the game data is a file on the SD card, SD:/3ds/hk3ds/hk3ds_<std|hd>.romfs):
+  hk3ds.cia / hk3ds_hd.cia                         the new code: a small CIA, installed over the old one with FBI
+  3ds/hk3ds/hk3ds.3dsx (standard)                  the same for the Homebrew Launcher
+  3ds/hk3ds/patch/<std|hd>/...                     data files changed since the data file's release, and files.txt
+Before v1.1 (the data inside the CIA) the code went in through Luma3DS's game patching instead:
+  luma/titles/<title id>/code.bin + exheader.bin
+Updates are cumulative: each one holds everything changed since the base release, so only the newest is needed.
 
-   python tools/make_patch.py BASE_DIR OUT_DIR
-BASE_DIR holds std.txt and hd.txt, the file lists of the released CIAs (tools/ctrfile.py romfs X.cia list.txt).
-Build hk3ds.elf (make) and hk3ds_hd.elf (make HD=1) first; the version comes from source/version.h."""
+   python tools/make_patch.py BASE_DIR OUT_DIR         an update over the release whose file lists are in BASE_DIR
+   python tools/make_patch.py --record-base BASE_DIR   write BASE_DIR's lists from romfs/ and romfs_hd/ (at a release)
+   python tools/make_patch.py --release OUT_DIR        a full release: the program zips beside the data files (make data),
+                                                       and the lists in patches/base_v<version>/
+BASE_DIR holds version.txt and std.txt / hd.txt ("sha1 size path" per data file).
+Build the code first (make cia, make HD=1 cia from v1.1; the ELFs before); the version comes from source/version.h."""
 import hashlib, os, re, shutil, subprocess, sys, tempfile, zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__)); TOP = os.path.dirname(HERE)
@@ -82,9 +88,76 @@ Changed data files: {n}.
 NAMES = {'std': ('standard', 'hk3ds.cia', 'Hollow Knight 3DS'), 'hd': ('HD', 'hk3ds_hd.cia', 'Hollow Knight 3DS HD')}
 
 
+def record_base(base_dir):
+    """the file lists of the data being released (romfs/, romfs_hd/: what make data packs), for later updates"""
+    os.makedirs(base_dir, exist_ok=True)
+    for ed, target, rsf, root in EDITIONS:
+        rows = []
+        for d, _, fs in os.walk(f'{TOP}/{root}'):
+            for f in fs:
+                p = os.path.join(d, f); rel = os.path.relpath(p, f'{TOP}/{root}')
+                b = open(p, 'rb').read(); rows.append(f'{hashlib.sha1(b).hexdigest()} {len(b)} {rel}')
+        open(f'{base_dir}/{ed}.txt', 'w').write('\n'.join(sorted(rows, key=lambda r: r.split(' ', 2)[2])) + '\n')
+        print(f'{ed}: {len(rows)} files')
+    open(f'{base_dir}/version.txt', 'w').write(version() + '\n')
+
+
+def is_v11(v):
+    """a base release with its data on the SD card (v1.1 and later)"""
+    try: return tuple(int(x) for x in v.split('.')[:2]) >= (1, 1)
+    except ValueError: return False
+
+
+UPDATE_README = """HK3DS {edition} update v{ver}
+{line}
+This updates HK3DS {edition} v{base} or later to v{ver}. It needs the game data file of v{base}
+(SD:/3ds/hk3ds/{datafile}), which stays as it is: only the code and the files changed since then are here.
+
+1. Copy the "3ds" folder to the root of your SD card (merge it with the one already there, replace files).
+2. Install {cia} with FBI (it replaces the installed one; your saves stay).
+   Using the Homebrew Launcher instead? Start 3ds/hk3ds/{tdsx} from it; no CIA needed.
+3. The title screen shows v{ver}.
+
+Each update holds everything since v{base}: a newer update replaces this one.
+Changed data files: {n}.
+"""
+DATAFILES = {'std': 'hk3ds_std.romfs', 'hd': 'hk3ds_hd.romfs'}
+
+
+def main_v11(base_dir, out_dir, ver, base_ver):
+    """v1.1 and later: the small CIA (and .3dsx) with the changed data files"""
+    for ed, target, rsf, root in EDITIONS:
+        stage = f'{out_dir}/hk3ds_update_v{ver}_{ed}'
+        shutil.rmtree(stage, ignore_errors=True); os.makedirs(f'{stage}/3ds/hk3ds')
+        cia = f'{TOP}/{target}.cia'
+        if not os.path.exists(cia) or os.path.getsize(cia) > 64 << 20:
+            sys.exit(f'{target}.cia is missing or still holds the data: build it with make{" HD=1" if ed == "hd" else ""} cia')
+        check_code(ctrfile.NCCH(cia).code(), f'{TOP}/{target}.elf')        # the CIA is this build's code
+        shutil.copyfile(cia, f'{stage}/{target}.cia')
+        shutil.copyfile(f'{TOP}/{target}.3dsx', f'{stage}/3ds/hk3ds/{target}.3dsx')
+        files, removed = changed_files(f'{base_dir}/{ed}.txt', f'{TOP}/{root}')
+        if removed: print(f'warning: {ed}: {len(removed)} files of the data file no longer exist (it still has them):', removed[:5])
+        pd = f'{stage}/3ds/hk3ds/patch/{ed}'; os.makedirs(pd)
+        for p in files:
+            os.makedirs(os.path.dirname(f'{pd}/{p}'), exist_ok=True); shutil.copyfile(f'{TOP}/{root}/{p}', f'{pd}/{p}')
+        sizes = {l.split()[2]: int(l.split()[1]) for l in open(f'{base_dir}/{ed}.txt') if len(l.split()) == 3}
+        base_lines = ''.join(f'BASE {p} {sizes[p]}\n' for p in BASE_CHECK if p in sizes)
+        open(f'{pd}/files.txt', 'w').write(f'HKPATCH {ver}\n' + base_lines + ''.join(p + '\n' for p in files))
+        edition = NAMES[ed][0]; head = f'HK3DS {edition} update v{ver}'
+        open(f'{stage}/README_UPDATE.txt', 'w').write(UPDATE_README.format(edition=edition, line='=' * len(head), ver=ver,
+            base=base_ver, datafile=DATAFILES[ed], cia=f'{target}.cia', tdsx=f'{target}.3dsx', n=len(files)))
+        z = f'{out_dir}/hk3ds_update_v{ver}_{ed}.zip'
+        with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for d, _, fs in os.walk(stage):
+                for f in fs:
+                    p = os.path.join(d, f); zf.write(p, os.path.relpath(p, stage))
+        print(f'{ed}: {target}.cia, {len(files)} data files -> {z} ({os.path.getsize(z)} bytes)')
+
+
 def main(base_dir, out_dir):
     """one zip per edition (hk3ds_patch_v<ver>_std.zip, _hd.zip): each holds only its own title's code and data"""
     ver = version(); base_ver = open(f'{base_dir}/version.txt').read().strip() if os.path.exists(f'{base_dir}/version.txt') else '?'
+    if is_v11(base_ver): return main_v11(base_dir, out_dir, ver, base_ver)
     with tempfile.TemporaryDirectory() as tmp:
         for ed, target, rsf, root in EDITIONS:
             stage = f'{out_dir}/hk3ds_patch_v{ver}_{ed}'
@@ -115,5 +188,47 @@ def main(base_dir, out_dir):
             print(f'{ed}: title {tid:016X}, code.bin {len(code)} B, {len(files)} data files -> {z} ({os.path.getsize(z)} bytes)')
 
 
+RELEASE_README = """Hollow Knight 3DS{hd} v{ver}
+{line}
+A fan port, for personal use: not for sale. You need the game data file of this version too:
+{datafile} ({size} MB), from the same release.
+
+1. Copy {datafile} into SD:/3ds/hk3ds/ (create the folder if it isn't there).
+2. Copy this zip's "3ds" folder to the root of your SD card, and install {cia} with FBI.
+   It installs over an earlier version; your saves stay.{hbl}
+3. Start the game: the title screen shows v{ver}.
+
+Coming from v1.0.22 to v1.0.25 (the Luma patches)? Delete SD:/luma/titles/{tid}, or Luma keeps
+running the old code, which can't find the new data file. SD:/3ds/hk3ds/patch/ can go too.
+{newds}
+Later updates are small zips (a new CIA and the files that changed); the data file stays.
+"""
+
+
+def release(out_dir):
+    """a full release: per edition a program zip (CIA, .3dsx, README) beside its data file (make data), and the data's
+    file lists in patches/base_v<version>/ for later updates"""
+    ver = version(); os.makedirs(out_dir, exist_ok=True)
+    for ed, target, rsf, root in EDITIONS:
+        cia, data = f'{TOP}/{target}.cia', f'{TOP}/{DATAFILES[ed]}'
+        if not os.path.exists(data): sys.exit(f'{DATAFILES[ed]} is missing: make{" HD=1" if ed == "hd" else ""} data')
+        if not os.path.exists(cia) or os.path.getsize(cia) > 64 << 20: sys.exit(f'{target}.cia missing or holds the data')
+        n = ctrfile.NCCH(cia); check_code(n.code(), f'{TOP}/{target}.elf')
+        hd = ' HD' if ed == 'hd' else ''
+        head = f'Hollow Knight 3DS{hd} v{ver}'
+        txt = RELEASE_README.format(hd=hd, ver=ver, line='=' * len(head), datafile=DATAFILES[ed], cia=f'{target}.cia',
+                                    size=os.path.getsize(data) >> 20, tid=f'{n.tid:016X}',
+                                    hbl='' if hd else '\n   Or start 3ds/hk3ds/hk3ds.3dsx from the Homebrew Launcher instead of installing the CIA.',
+                                    newds='This version needs a New 3DS, New 3DS XL or New 2DS XL.\n' if hd else '')
+        z = f'{out_dir}/hk3ds_v{ver}_{ed}.zip'
+        with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.write(cia, f'{target}.cia'); zf.write(f'{TOP}/{target}.3dsx', f'3ds/hk3ds/{target}.3dsx')
+            zf.writestr('README.txt', txt)
+        print(f'{ed}: {z} ({os.path.getsize(z)} bytes) + {data} ({os.path.getsize(data) >> 20} MB)')
+    record_base(f'{TOP}/patches/base_v{ver}')
+
+
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2])
+    if sys.argv[1] == '--record-base': record_base(sys.argv[2])
+    elif sys.argv[1] == '--release': release(sys.argv[2])
+    else: main(sys.argv[1], sys.argv[2])

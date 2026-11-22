@@ -35,6 +35,19 @@ Everything in those rooms runs the game's own scripts (PlayMaker state machines 
 - **Music**: each room's music and ambience follow the game's music cues and music regions.
 - Glow and light sprites are drawn with additive blending, like in the game.
 
+## New in v1.1: the game data on the SD card, small installs
+- **Two parts.** The CIA and the `.3dsx` hold only the code (under 1 MB). The game data is one RomFS image on the SD
+  card, `SD:/3ds/hk3ds/hk3ds_std.romfs` (`hk3ds_hd.romfs` for HD), made by `make data` (`mkromfs3ds romfs/`). At
+  start the game opens it and mounts it as `romfs:` (`romfsMountFromFile`), so nothing else reads data differently;
+  without it, the program's own RomFS is used if it holds the data (a `make FULL=1` build), else the top screen says
+  where the data file goes (`main.c`, `data_mount`). The small CIA's RomFS holds only `text/version.txt` and a note.
+  Same title IDs, so the small CIA installs over a v1.0.x one.
+- **Updates** are a small CIA and `.3dsx` plus the data files changed since the data file's release in
+  `SD:/3ds/hk3ds/patch/<std|hd>/` (`tools/make_patch.py`: `hk3ds_update_v<ver>_<ed>.zip`; `--record-base` writes the
+  release's file lists, `patches/base_v1.1.0/`). Luma game patching is no longer used; an update checks the CIA's code
+  against the ELF. The title-screen warnings now speak of the data file (`patch.c`).
+- `tools/build.sh` makes the data files too and says where each file goes on the SD card.
+
 ## Fixes in v1.0.25 (patch)
 - **False Knight's arena on the Old 3DS: no floor, no boss.** The standard build ran out of memory in Crossroads_10, the
   biggest room in the game: its objects alone took most of the Old 3DS's heap, and the boss scene (the arena floor,

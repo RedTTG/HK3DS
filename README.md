@@ -41,8 +41,9 @@ Controls: **B** jump · **Y** nail (Up/Down to aim, hold for nail arts) · **A**
 ## Building it
 
 The build converts your own copy of Hollow Knight into the port's data, then compiles the game. It's one command, but
-the first build takes a long time: it converts all 480 scenes (expect several hours, most of a day on a slow PC), and
-it needs about 15 GB of free disk space. It's tested on Linux (Ubuntu); on Windows, use WSL.
+the first build takes a long time: it converts all 480 scenes, which takes hours (most of a day on a slow PC; `--jobs`
+below converts several rooms at once). It needs about 15 GB of free disk space. It's tested on Linux (Ubuntu 24.04);
+on Windows, use WSL.
 
 ### 1. Install the tools
 On Ubuntu or Debian (or Ubuntu in WSL on Windows):
@@ -60,6 +61,7 @@ For the `.cia` (the installable version) you also need **makerom**
 ([Project_CTR releases](https://github.com/3DSGuy/Project_CTR/releases)) and **bannertool**
 ([bannertool](https://github.com/Steveice10/bannertool)). Put both programs in `/opt/devkitpro/tools/bin/` (or anywhere
 on your `PATH`). Without them you still get the `.3dsx`, which runs from the Homebrew Launcher.
+When it's done, the build lists the files and where each one goes on your SD card.
 
 ### 2. Export the game
 You need Hollow Knight for PC (Steam or GOG) and [AssetRipper](https://github.com/AssetRipper/AssetRipper/releases).
@@ -82,8 +84,9 @@ If you keep `hkdata` somewhere else, tell the build where: `export HKDATA=/path/
 From the repository folder:
 ```
 tools/build.sh --check     # optional: checks the tools and the export folder, and says what's missing
-tools/build.sh             # the standard version: hk3ds.3dsx and hk3ds.cia
-tools/build.sh --hd        # the standard version and the HD one (hk3ds_hd.cia, for the New 3DS family)
+tools/build.sh             # the standard version: hk3ds_std.romfs (the game data), hk3ds.3dsx and hk3ds.cia
+tools/build.sh --hd        # the standard version and the HD one (hk3ds_hd.romfs, hk3ds_hd.cia: New 3DS family)
+tools/build.sh --jobs 4    # converts 4 rooms at once: much faster with several CPU cores (1-2 GB of memory each)
 ```
 It checks everything it needs first and tells you what's missing and how to install it. Then it runs each step in
 order and shows its progress. If a step fails, the build stops and shows that step's log (`work/logs/<step>.log`).
@@ -101,36 +104,46 @@ What the steps do:
 | `pack` | the objects' data, sprites and sounds (`pack_objs.py`), their particle systems (`obj_particles.py`) and per-frame hitboxes (`tk_colliders.py`) |
 | `particles` | the rooms' own particle effects (`particles.py`) |
 | `gamedata` | the Knight's and enemies' sprites, the HUD, fonts, menus, map, Journal, music, text in English and Spanish |
-| `compile` | `hk3ds.3dsx` and `hk3ds.cia` (`make`, `make cia`) |
-| `hd_*` (`--hd`) | `romfs_hd/`: the same data with twice the detail, then `hk3ds_hd.cia` |
+| `compile` | `hk3ds_std.romfs` (the game data file, `make data`), `hk3ds.3dsx` and `hk3ds.cia` (`make`, `make cia`) |
+| `hd_*` (`--hd`) | `romfs_hd/`: the same data with twice the detail, then `hk3ds_hd.romfs` and `hk3ds_hd.cia` |
 
 The build makes plain stand-in icons and banners (`icon.png`, `cia/banner.png`...) if you don't have your own; put
 your own art there any time. `tools/data/` holds the port's own lookup tables (no game assets): which game script each
 component is, the music cues, the objects each room converts.
 
 ## Installing
-Install the CIA with **FBI** (or over Wi-Fi: `python install/install_with_fbi.py` shows a QR code for FBI's Remote
-Install). Sound needs `SD:/3ds/dspfirm.cdc` (dump it with DSP1).
+From v1.1 the game comes in two parts: a small program (the CIA, or the `.3dsx`) and one big game data file that goes
+on the SD card. Updates after that only replace the small program and a few changed files.
+1. Copy the game data file to `SD:/3ds/hk3ds/`: `hk3ds_std.romfs` for the standard version, `hk3ds_hd.romfs` for HD.
+2. Install `hk3ds.cia` (or `hk3ds_hd.cia`) with **FBI**; it replaces an older install, and your saves stay. Or, for
+   the standard version, put `hk3ds.3dsx` in `SD:/3ds/hk3ds/` and start it from the Homebrew Launcher instead.
+3. Sound needs `SD:/3ds/dspfirm.cdc` (dump it with DSP1).
+
+Coming from v1.0.x? Delete the game's folders in `SD:/luma/titles/` (`000400000F4C3D00` for the standard version,
+`000400000F4C3E00` for HD) if your earlier patches left them there: Luma would otherwise keep running the old code,
+which can't find the new data file. The old `SD:/3ds/hk3ds/patch/` folder can go too.
+
+If the game says its data is missing, the data file isn't in `SD:/3ds/hk3ds/` or has another name.
 
 The HD build needs the New 3DS's full 124 MB. If line 2 of `SD:/3ds/hk3ds/log.txt` says `low memory`, turn off
 Luma3DS's "New 3DS CPU" setting (hold SELECT at boot): both builds already run at 804 MHz with the L2 cache.
+`make FULL=1` (and `make FULL=1 cia`) still builds the old all-in-one `.3dsx` / CIA with the data inside.
 
-## Updating without reinstalling
-From v1.0.22, updates come as a small patch zip over the installed CIA. From v1.0.23 there is one zip per version
-(`hk3ds_patch_v<version>_std.zip` for the standard CIA, `_hd.zip` for the HD one): use the one for the CIA you have.
-1. Copy the zip's `luma` and `3ds` folders to the root of the SD card.
-2. Turn on Luma3DS's **Enable game patching** (hold SELECT while powering on, select it, START to save).
+## Updating
+Updates come as one zip per version, `hk3ds_update_v<version>_std.zip` or `_hd.zip`:
+1. Copy the zip's `3ds` folder to the root of the SD card (merge it, replace files).
+2. Install the zip's CIA with FBI (or use its `.3dsx`).
 3. The title screen shows the new version.
 
-The new code goes in through Luma's game patching (`SD:/luma/titles/<title id>/code.bin` and `exheader.bin`;
-standard `000400000F4C3D00`, HD `000400000F4C3E00`). Data files changed since the CIA release go in
-`SD:/3ds/hk3ds/patch/std|hd/`, and the game reads them from there instead of the CIA (`source/patch.c`). Patches are
-cumulative, and a patch's data is only used by the version it was made for. If you install a newer full CIA later,
-delete the title's folder in `SD:/luma/titles`; the title screen warns you if an old patch is still loaded.
+The data file stays as it was. Files changed since its release go in `SD:/3ds/hk3ds/patch/std|hd/`, and the game reads
+them from there instead of the data file (`source/patch.c`). Updates are cumulative, and an update's files are only
+used by the version they were made for; the title screen warns you when the data file is another version than the
+update expects.
 
-`tools/make_patch.py` builds a patch from your two ELFs and the file lists of the CIAs you released
-(`tools/ctrfile.py romfs X.cia list.txt`). It checks the code against the ELF, because Luma halts the console on a
-malformed `code.bin`.
+`tools/make_patch.py` builds an update from the small CIAs (`make cia`, `make HD=1 cia`) and the file lists of the data
+files you released (`tools/make_patch.py --record-base patches/base_v<version>` when you release one). Before v1.1, the
+code went in through Luma3DS's game patching (`SD:/luma/titles/<title id>/code.bin`); the tool still makes those
+patches for a base release older than v1.1.
 
 ## Testing without a 3DS
 `host/` is a small software stand-in for libctru and citro2d that runs the real game code on a PC, headless, with

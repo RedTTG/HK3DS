@@ -1,8 +1,9 @@
 #!/bin/bash
 # HK3DS: build the game from your own copy of Hollow Knight, start to finish, with one command:
 #
-#   tools/build.sh            the standard version: romfs/, then hk3ds.3dsx and hk3ds.cia
-#   tools/build.sh --hd       the HD version as well: romfs_hd/, then hk3ds_hd.cia
+#   tools/build.sh            the standard version: romfs/, then hk3ds_std.romfs (the game data for the SD card),
+#                             hk3ds.3dsx and hk3ds.cia (the code)
+#   tools/build.sh --hd       the HD version as well: romfs_hd/, then hk3ds_hd.romfs and hk3ds_hd.cia
 #
 # It reads the game exports in $HKDATA (default: the hkdata folder next to this repository's folder, or ./hkdata).
 # Every step writes its own log in work/logs/. When a step fails, the build stops and names the step and its log.
@@ -16,10 +17,11 @@
 #   --from STEP      forget STEP and every step after it, and run them again (see --list)
 #   --only STEP      run just STEP (again, if it was done)
 #   --no-compile     convert the game data, but don't build the .3dsx / .cia
+#   --jobs N, -j N   convert N rooms at once (much faster on a PC with several cores; each needs 1-2 GB of memory)
 #   --list           list the steps
 set -o pipefail
 TOP=$(cd "$(dirname "$0")/.." && pwd); T=$TOP/tools; W=$TOP/work
-HD=0; ONLY=""; FROM=""; COMPILE=1; CHECKONLY=0; ROOMS=$T/data/all_rooms.txt
+HD=0; ONLY=""; FROM=""; COMPILE=1; CHECKONLY=0; ROOMS=$T/data/all_rooms.txt; JOBS=1
 STEPS="check index objects rooms install pack particles gamedata compile"
 HDSTEPS="hd_copy hd_rooms hd_objects hd_gamedata hd_compile"
 
@@ -31,6 +33,8 @@ while [ $# -gt 0 ]; do
     --from) FROM=$2; shift ;;
     --only) ONLY=$2; shift ;;
     --no-compile) COMPILE=0 ;;
+    --jobs) JOBS=$2; shift ;;
+    -j*) JOBS=${1#-j}; [ -z "$JOBS" ] && { JOBS=$2; shift; } ;;
     --list) echo "steps: $STEPS"; echo "HD steps (--hd): $HDSTEPS"; exit 0 ;;
     -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option $1 (tools/build.sh --help)"; exit 2 ;;
@@ -59,16 +63,28 @@ is_done() { [ -f "$W/done/$1" ]; }
 # run_rooms STEP CMD...: run CMD <room> for every room not done yet in STEP (one marker per room, so a long step
 # that stops halfway carries on from the room it stopped at)
 run_rooms() {
-  local step=$1; shift; local n=0 tot; tot=$(grep -c . "$ROOMS")
-  mkdir -p "$W/done/$step.rooms"
+  local step=$1; shift; local n=0 tot r; tot=$(grep -c . "$ROOMS")
+  mkdir -p "$W/done/$step.rooms" "$W/logs/$step"; rm -f "$W/logs/$step.failed"
   while read -r r; do
     [ -z "$r" ] && continue; n=$((n + 1))
     [ -f "$W/done/$step.rooms/$r" ] && continue
+    [ -f "$W/logs/$step.failed" ] && break
     printf '\r  %4d/%d  %-50s' "$n" "$tot" "$r" >&3
-    echo "== $r"
-    if ! "$@" "$r" < /dev/null; then echo "room $r failed"; printf '\n  room %s failed\n' "$r" >&3; return 1; fi
-    touch "$W/done/$step.rooms/$r"
+    if [ "$JOBS" -le 1 ]; then
+      echo "== $r"
+      if ! "$@" "$r" < /dev/null; then echo "room $r failed"; printf '\n  room %s failed\n' "$r" >&3; return 1; fi
+      touch "$W/done/$step.rooms/$r"
+    else          # --jobs: up to JOBS rooms at once, each with its own log (work/logs/<step>/<room>.log)
+      while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n; done
+      ( if "$@" "$r" > "$W/logs/$step/$r.log" 2>&1 < /dev/null; then touch "$W/done/$step.rooms/$r"
+        else echo "$r" >> "$W/logs/$step.failed"; fi ) &
+    fi
   done < "$ROOMS"
+  wait
+  if [ -f "$W/logs/$step.failed" ]; then
+    r=$(head -n 1 "$W/logs/$step.failed"); rm -f "$W/logs/$step.failed"
+    echo "== $r"; cat "$W/logs/$step/$r.log"; echo "room $r failed"; printf '\n  room %s failed\n' "$r" >&3; return 1
+  fi
   printf '\r  %4d/%d  %-50s\n' "$tot" "$tot" "rooms done" >&3
 }
 
@@ -96,6 +112,7 @@ step_check() {
     [ -n "$DEVKITPRO" ] && [ -n "$DEVKITARM" ] && ok "DEVKITPRO / DEVKITARM set" \
       || no "DEVKITPRO / DEVKITARM" "install devkitPro and open a new terminal (or: export DEVKITPRO=/opt/devkitpro DEVKITARM=/opt/devkitpro/devkitARM)"
     [ -x "$DEVKITARM/bin/arm-none-eabi-gcc" ] && ok "devkitARM compiler" || no "devkitARM compiler" "dkp-pacman -S 3ds-dev"
+    command -v mkromfs3ds >/dev/null && ok "mkromfs3ds (the data file)" || no "mkromfs3ds (the data file)" "dkp-pacman -S 3ds-dev"
     for l in libctru citro2d citro3d; do
       ls "$DEVKITPRO"/libctru/lib/lib${l#lib}*.a >/dev/null 2>&1 && ok "$l" || no "$l" "dkp-pacman -S 3ds-dev"
     done
@@ -194,7 +211,7 @@ step_compile() {
   [ $COMPILE = 1 ] || { say "  (--no-compile: skipped)"; return 0; }
   cd "$TOP" || return 1
   "$PY" "$T/make_icons.py" "$TOP" || return 1      # icon.png / banners of your own if there are none yet
-  make || return 1
+  make && make data || return 1                    # hk3ds.3dsx (the code) and hk3ds_std.romfs (the game data)
   if command -v makerom >/dev/null && command -v bannertool >/dev/null; then make cia || return 1; fi
 }
 
@@ -222,7 +239,7 @@ step_hd_gamedata() {
 }
 step_hd_compile() {
   [ $COMPILE = 1 ] || { say "  (--no-compile: skipped)"; return 0; }
-  cd "$TOP" && "$PY" "$T/make_icons.py" "$TOP" && make HD=1 || return 1
+  cd "$TOP" && "$PY" "$T/make_icons.py" "$TOP" && make HD=1 && make HD=1 data || return 1
   if command -v makerom >/dev/null && command -v bannertool >/dev/null; then make HD=1 cia || return 1; fi
 }
 
@@ -237,7 +254,8 @@ if [ -n "$ONLY" ]; then
   rm -rf "$W/done/$ONLY" "$W/done/$ONLY.rooms"; ALL=$ONLY
 fi
 
-echo "HK3DS build: exports in $HKDATA, rooms from $ROOMS ($(grep -c . "$ROOMS"))"
+case "$JOBS" in ''|*[!0-9]*|0) echo "--jobs needs a number of rooms, like --jobs 4"; exit 2 ;; esac
+echo "HK3DS build: exports in $HKDATA, rooms from $ROOMS ($(grep -c . "$ROOMS")), $JOBS at a time"
 step_check || fail "requirements: install what's marked MISSING above"
 [ $CHECKONLY = 1 ] && { echo "All requirements found."; exit 0; }
 for s in $ALL; do
@@ -250,7 +268,14 @@ for s in $ALL; do
 done
 echo
 echo "Done."
-[ -f "$TOP/hk3ds.3dsx" ] && echo "  $TOP/hk3ds.3dsx"
-[ -f "$TOP/hk3ds.cia" ] && echo "  $TOP/hk3ds.cia"
-[ $HD = 1 ] && [ -f "$TOP/hk3ds_hd.cia" ] && echo "  $TOP/hk3ds_hd.cia"
+if [ -f "$TOP/hk3ds_std.romfs" ]; then
+  echo "On your SD card (README.md, 'Installing'):"
+  echo "  SD:/3ds/hk3ds/hk3ds_std.romfs     <- $TOP/hk3ds_std.romfs  (the game data)"
+  echo "  SD:/3ds/hk3ds/hk3ds.3dsx          <- $TOP/hk3ds.3dsx       (for the Homebrew Launcher)"
+  [ -f "$TOP/hk3ds.cia" ] && echo "  install with FBI                    $TOP/hk3ds.cia"
+fi
+if [ $HD = 1 ] && [ -f "$TOP/hk3ds_hd.romfs" ]; then
+  echo "  SD:/3ds/hk3ds/hk3ds_hd.romfs      <- $TOP/hk3ds_hd.romfs   (the HD game data)"
+  [ -f "$TOP/hk3ds_hd.cia" ] && echo "  install with FBI                    $TOP/hk3ds_hd.cia"
+fi
 exit 0
