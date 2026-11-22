@@ -89,13 +89,23 @@ run_rooms() {
     [ -z "$r" ] && continue; n=$((n + 1))
     [ -f "$W/done/$step.rooms/$r" ] && continue
     [ -f "$W/logs/$step.failed" ] && break
+    if compgen -G "$status_dir/*.status" >/dev/null; then
+      for status_file in "$status_dir"/*.status; do
+        [ -f "$status_file" ] || continue
+        [ "$(cat "$status_file")" -eq 0 ] 2>/dev/null || break 2
+      done
+    fi
     printf '\r  %4d/%d  %-50s' "$n" "$tot" "$r" >&3
     if [ "$JOBS" -le 1 ]; then
       echo "== $r" | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log"
       "$@" "$r" < /dev/null 2>&1 | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log"
       status=${PIPESTATUS[0]}
       if [ "$status" -ne 0 ]; then
+        rm -f "$W/done/$step.rooms/$r"
         echo "[exit $status] room $r" | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log" >&2
+        if grep -Eq "Cannot find scene:|Traceback \\(most recent call last\\):|TypeError:|SystemExit:" "$W/logs/$step/$r.log"; then
+          echo "[fatal] $r: room export stopped on an actionable error" | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log" >&2
+        fi
         echo "room $r failed with exit $status"
         echo "  log: $W/logs/$step/$r.log"
         echo "  last output:"
@@ -113,7 +123,11 @@ run_rooms() {
         if [ "$status" -eq 0 ]; then
           touch "$W/done/$step.rooms/$r"
         else
+          rm -f "$W/done/$step.rooms/$r"
           echo "[exit $status] room $r" >> "$W/logs/$step/$r.log"
+          if grep -Eq "Cannot find scene:|Traceback \\(most recent call last\\):|TypeError:|SystemExit:" "$W/logs/$step/$r.log"; then
+            echo "[fatal] $r: room export stopped on an actionable error" >> "$W/logs/$step/$r.log"
+          fi
         fi
         echo "$status" > "$status_dir/$r.status"
       ) &
