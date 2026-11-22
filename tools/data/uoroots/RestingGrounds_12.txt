@@ -1,0 +1,4 @@
+bot1
+door_Mansion
+Death Respawn Trigger
+_SceneManager

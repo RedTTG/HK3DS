@@ -1,0 +1,4 @@
+Godseeker EngineRoom NPC
+Boss Scene Controller
+right1
+GG_Arena_Prefab/Darkness Region

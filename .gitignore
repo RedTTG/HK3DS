@@ -25,8 +25,6 @@ host/hk3ds_host*
 tools/__pycache__/
 __pycache__/
 # tool output written next to the tools
-tools/data/uoroots/
-tools/data/*.json
 /hkdata/
 /obj/
 /.idea/

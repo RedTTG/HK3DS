@@ -1,0 +1,10 @@
+_Enemies/Mawlek Body
+Heart Piece
+Battle Gate
+Battle Gate 1
+Darkness Region
+Break Floor 1
+Dream Gate Set Lock
+Battle Scene
+_SceneManager
+Infected_Parent
