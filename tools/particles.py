@@ -380,6 +380,7 @@ if __name__ == '__main__':
         out = sys.argv[2]
         print(export_zones(out + '/rooms'))
         zt = zone_table(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'all_rooms.txt')).read().split())
+        os.makedirs(out + '/text', exist_ok=True)      # a fresh romfs has no text/ yet (the game data comes later)
         open(out + '/text/ptczones.txt', 'w').write(''.join(f'{r} {z}\n' for r, z in sorted(zt.items())))
         print(len(zt), 'rooms in the zone table')
         sys.exit(0)

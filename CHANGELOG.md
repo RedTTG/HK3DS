@@ -35,6 +35,28 @@ Everything in those rooms runs the game's own scripts (PlayMaker state machines 
 - **Music**: each room's music and ambience follow the game's music cues and music regions.
 - Glow and light sprites are drawn with additive blending, like in the game.
 
+## Fixes in v1.0.25 (patch)
+- **False Knight's arena on the Old 3DS: no floor, no boss.** The standard build ran out of memory in Crossroads_10, the
+  biggest room in the game: its objects alone took most of the Old 3DS's heap, and the boss scene (the arena floor,
+  the husks and False Knight, `Crossroads_10_boss`) then failed to load without a word. The parsed object data is now
+  a fifth smaller (32-byte JSON nodes instead of 40) and every repeated key and string of a room's file is stored once,
+  which frees about 4 MB in that room; the boss scene loads with 10 MB to spare (checked in Azahar as an Old 3DS). The
+  log now says when a room's object file or boss scene can't load (`json.c`, `uo.c`). The graphics memory is still
+  tight there: the bottom screen's map may not draw in that one room on an Old 3DS.
+- **Per-frame hitboxes lost in 25 rooms.** `tools/tk_colliders.py` writes each animated object's per-frame collider
+  boxes (`tkbox`) into its room's `.obj`, but nothing ran it after `pack_objs.py`, which writes a fresh `.obj`: the 24
+  re-packed rooms of v1.0.24's particle fix (and Crossroads_01) had lost them, so the Mantis Warriors', husks' and the
+  Collector's attack boxes stayed as saved in the scene. Restored; `tools/build.sh` runs it after every pack, and
+  `tools/regress.sh` checks that running it again over the rooms changes nothing.
+- **Build tools.** `tools/build.sh` builds everything from the export in one command (see the public README);
+  `pack_objs.py` creates `romfs/sfx/` itself (a fresh build converted no sounds at all, silently), the Knight's atlas
+  comes from the texture dump (`hkcommon.KNIGHT_ATLAS`), `tools/data/` gains `gg_statues.txt` and `music_cues.txt`
+  (no tool made them), and `tools/make_icons.py` makes stand-in icons and banners when there are none.
+- **Boss names.** A boss fight shows the boss's name in the corner by activating the game's Area Title with
+  "Area Event" (FALSE_KNIGHT, HORNET, MANTIS_LORDS, ...), "Visited" and "Display Right" set: Area Title Control's
+  area branch. Only its NPC branch was handled, so no boss name ever showed. All 36 boss titles now show, bottom right
+  (`dialogue.c`, `title_npc_now`).
+
 ## Fixes in v1.0.24 (patch)
 - **Invisible enemy shots and effects in 42 rooms.** The Fungoons' gas, and every other particle effect on the
   objects of 42 rooms (most of the Fungal Wastes, Mantis Village, Kingdom's Edge, the Abyss, some of the White Palace

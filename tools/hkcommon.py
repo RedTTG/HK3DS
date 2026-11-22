@@ -4,7 +4,9 @@ import yaml
 Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 ROOT = os.environ.get('HKDATA', 'hkdata')
 EX = f'{ROOT}/ex'
-KNIGHT_ATLAS = os.environ.get('KNIGHT_ATLAS', '/mnt/user-data/uploads/Downloads/knight_atlas.png')
+# the Knight's tk2d atlas, which the export doesn't link to his sprite collection: the texture dump's atlas0_325
+# (pixel for pixel the same as the atlas this was first built from)
+KNIGHT_ATLAS = os.environ.get('KNIGHT_ATLAS', f'{ROOT}/hs/Texture2D/atlas0_325.png')
 
 def load_yaml_docs(path):
     src = open(path, encoding='utf-8').read()

@@ -24,6 +24,7 @@ def audio_names(x, acc):
 
 def convert_audio(names, sfxdir):
     am = {os.path.splitext(f)[0]: f for f in os.listdir(f'{EX}/AudioClip') if f.endswith(('.ogg', '.wav'))}
+    os.makedirs(sfxdir, exist_ok=True)      # a fresh romfs has no sfx/ yet: ffmpeg can't create it, and every sound failed
     n = 0
     for nm in sorted(names):
         out = f'{sfxdir}/{nm}.pcm'
@@ -31,6 +32,7 @@ def convert_audio(names, sfxdir):
         src = f'{EX}/AudioClip/{am[nm]}'
         r = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', src, '-ac', '1', '-ar', '22050', '-f', 's16le', out])
         if r.returncode == 0: n += 1
+        else: sys.exit(f'ffmpeg could not convert {src}')
     return n
 
 def drop_skipped_roots(tree):

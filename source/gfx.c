@@ -69,7 +69,9 @@ void hk_log(const char *fmt, ...) {
     }
     FILE *f = fopen("sdmc:/3ds/hk3ds/log.txt", first ? "w" : "a"); first = false;
     if (!f) return;
-#ifndef __HOST__
+#ifdef __HOST__
+    if (getenv("HK_MEMLOG")) { struct mallinfo2 mi = mallinfo2(); fprintf(f, "[used %6zuK] ", mi.uordblks / 1024); }
+#else
     struct mallinfo mi = mallinfo();
     fprintf(f, "[lin %5luK heap %5luK] ", (unsigned long)(linearSpaceFree() / 1024), (unsigned long)((envGetHeapSize() - mi.uordblks) / 1024));
 #endif

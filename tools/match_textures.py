@@ -20,7 +20,12 @@ for sc in ([] if sys.argv[1:] == ['--all'] else sys.argv[1:]):
         if any(x[2] in refs for x in L): need.add(tg)
 if sys.argv[1:]==['--all']: need=set(missing)
 res={}
+# matched by eye: the main menu's sprite atlas, which the alpha comparison below can't tell from its look-alikes
+PINNED={'3a648cd54cdac654aa48bedbcc89b9b4': 'sactx-0-1024x1024-DXT5_BC3-Menu-bf604a84'}
+for tg,n in PINNED.items():
+    if tg in need and n in byname: res[tg]=byname[n][0]
 for tg in need:
+    if tg in res: continue
     L=missing[tg]; rects=[r for _,r,_ in L if r]; names=[n for n,_,_ in L]
     if not rects: continue
     if len(L)==1 and names[0] in byname: res[tg]=byname[names[0]][0]; continue

@@ -29,6 +29,14 @@ EOF
 )
 check "rooms with object particle art keep their particle systems (${np})" '[ "${np%% *}" = 0 ]'
 
+# the same for the per-frame collider tables (tools/tk_colliders.py: enemies' attack boxes follow their animation):
+# running it again over a copy of the rooms must change nothing (25 re-packed rooms had lost them before v1.0.25)
+mkdir -p "$W/tk"; cp "${HK_ROMFS:-$H/romfs}"/rooms/*.obj "$W/tk/"
+python3 "$H/tools/tk_colliders.py" "$W"/tk/*.obj > /dev/null 2>&1
+nt=0; tkl=""; for f in "$W"/tk/*.obj; do cmp -s "$f" "${HK_ROMFS:-$H/romfs}/rooms/$(basename "$f")" || { nt=$((nt+1)); tkl="$tkl $(basename "$f" .obj)"; }; done
+check "rooms keep their per-frame collider tables ($nt:$(echo $tkl | cut -c1-60))" '[ "$nt" = 0 ]'
+rm -rf "$W/tk"
+
 run well "Town 185 4" "600:"
 check "Dirtmouth well drops into the Crossroads" 'grep -q "enter_room(Crossroads_01, top1)" $W/well/log'
 

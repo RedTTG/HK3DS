@@ -6,17 +6,20 @@
 typedef enum { J_NULL, J_FALSE, J_TRUE, J_NUM, J_STR, J_ARR, J_OBJ } JType;
 
 typedef struct JVal JVal;
+// 32 bytes on the 3DS (it was 40): a room's objects are a few hundred thousand of these, and on an Old 3DS the
+// biggest rooms (False Knight's arena) ran out of memory before their boss scene could load
 struct JVal {
-    JType t;
-    int n;                 // children count (arrays/objects)
-    double num;
-    const char *s;         // string value
-    const char *key;       // key when inside an object
-    JVal *child, *next;    // first child / next sibling
+    unsigned t : 4;        // JType
+    unsigned n : 28;       // children count (arrays/objects)
     int cache;             // FSM runtime: resolved variable index + 1 for {"var": name} nodes (0 unknown)
+    double num;
+    const char *s;         // string value (read-only: equal strings of one file share their storage)
+    const char *key;       // key when inside an object (shared the same way)
+    JVal *child, *next;    // first child / next sibling
 };
 
-typedef struct { char *mem; size_t used, cap; } JArena;
+// itab: while a file is parsed, its strings so far (each distinct key or value is stored once)
+typedef struct { char *mem; size_t used, cap; const char **itab; unsigned icap, icount; } JArena;
 
 JVal *json_parse(JArena *a, const char *text, size_t len);   // NULL on error
 void json_free(JArena *a);
