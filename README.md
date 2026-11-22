@@ -87,7 +87,10 @@ scripts/00_build.sh --check     # optional: checks the tools and the export fold
 scripts/00_build.sh             # the standard version: hk3ds_std.romfs (the game data), hk3ds.3dsx and hk3ds.cia
 scripts/00_build.sh --hd        # the standard version and the HD one (hk3ds_hd.romfs, hk3ds_hd.cia: New 3DS family)
 scripts/00_build.sh --jobs 4    # converts 4 rooms at once: much faster with several CPU cores (1-2 GB of memory each)
+scripts/00_build.sh --index     # force regeneration of all export and lookup indexes
 ```
+The `index` step runs automatically when its generated PKL/JSON files or room list are missing. Use `--index` to
+force it even when every generated file is already present.
 It checks everything it needs first and tells you what's missing and how to install it. Then it runs each step in
 order and shows its progress. If a step fails, the build stops and shows that step's log (`work/logs/<step>.log`).
 Fix the problem and run the same command again: it carries on from where it stopped, so the rooms it already

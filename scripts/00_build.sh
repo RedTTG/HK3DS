@@ -16,12 +16,13 @@
 #   --rooms FILE     convert only the rooms listed in FILE, one per line (default: tools/data/all_rooms.txt)
 #   --from STEP      forget STEP and every step after it, and run them again (see --list)
 #   --only STEP      run just STEP (again, if it was done)
+#   --index          force regeneration of the HKDATA export and lookup indexes
 #   --no-compile     convert the game data, but don't build the .3dsx / .cia
 #   --jobs N, -j N   convert N rooms at once (much faster on a PC with several cores; each needs 1-2 GB of memory)
 #   --list           list the steps
 set -o pipefail
 TOP=$(cd "$(dirname "$0")/.." && pwd); T=$TOP/tools; W=$TOP/work
-HD=0; ONLY=""; FROM=""; COMPILE=1; CHECKONLY=0; ROOMS=$T/data/all_rooms.txt; JOBS=1
+HD=0; ONLY=""; FROM=""; COMPILE=1; CHECKONLY=0; FORCE_INDEX=0; ROOMS=$T/data/all_rooms.txt; JOBS=1
 STEPS="check index objects rooms install pack particles gamedata compile"
 HDSTEPS="hd_copy hd_rooms hd_objects hd_gamedata hd_compile"
 
@@ -32,6 +33,7 @@ while [ $# -gt 0 ]; do
     --rooms) ROOMS=$(cd "$(dirname "$2")" && pwd)/$(basename "$2"); shift ;;
     --from) FROM=$2; shift ;;
     --only) ONLY=$2; shift ;;
+    --index) FORCE_INDEX=1 ;;
     --no-compile) COMPILE=0 ;;
     --jobs) JOBS=$2; shift ;;
     -j*) JOBS=${1#-j}; [ -z "$JOBS" ] && { JOBS=$2; shift; } ;;
@@ -107,6 +109,11 @@ step_check() {
   done
   [ -f "$HKDATA/hs/Texture2D/atlas0_325.png" ] && ok "hs/Texture2D/atlas0_325.png" \
     || no "hs/Texture2D/atlas0_325.png" "the Knight's atlas: the texture dump looks different from the one README.md describes"
+  if index_required; then
+    printf '  %-34s missing: the build will run scripts/01_index_hkdata.sh\n' "index data" >&3
+  else
+    ok "index data"
+  fi
   if [ $COMPILE = 1 ]; then
     say "Checking devkitPro (to build the .3dsx / .cia; --no-compile skips this)"
     [ -n "$DEVKITPRO" ] && [ -n "$DEVKITARM" ] && ok "DEVKITPRO / DEVKITARM set" \
@@ -127,6 +134,31 @@ step_check() {
 step_index() {
   # indexes of the export the converters read (written into $HKDATA)
   "$TOP/scripts/01_index_hkdata.sh" --hkdata "$HKDATA" --workers "$JOBS" || return 1
+}
+
+index_required() {
+  [ "$FORCE_INDEX" = 1 ] && return 0
+  for f in \
+    "$HKDATA/metamaps.pkl" \
+    "$HKDATA/tex2sprites.pkl" \
+    "$HKDATA/meta_AudioClip.pkl" \
+    "$HKDATA/hs_alpha4.pkl" \
+    "$HKDATA/hs_texmatch.pkl" \
+    "$HKDATA/uanim_index.pkl" \
+    "$HKDATA/meta_GameObject.pkl" \
+    "$HKDATA/meta_Material.pkl" \
+    "$HKDATA/meta_MonoBehaviour.pkl" \
+    "$HKDATA/meta_Sprite.pkl" \
+    "$HKDATA/meta_Texture2D.pkl" \
+    "$T/data/all_rooms.txt" \
+    "$T/data/audio_map.json" \
+    "$T/data/cs_sigs.json" \
+    "$T/data/fsm_templates.json" \
+    "$T/data/script_guids.json"
+  do
+    [ -f "$f" ] || return 0
+  done
+  return 1
 }
 
 step_objects() {
@@ -252,9 +284,22 @@ if [ -n "$ONLY" ]; then
 fi
 
 case "$JOBS" in ''|*[!0-9]*|0) echo "--jobs needs a number of rooms, like --jobs 4"; exit 2 ;; esac
-echo "HK3DS build: exports in $HKDATA, rooms from $ROOMS ($(grep -c . "$ROOMS")), $JOBS at a time"
+if [ "$ONLY" = "index" ]; then FORCE_INDEX=1; fi
 step_check || fail "requirements: install what's marked MISSING above"
-[ $CHECKONLY = 1 ] && { echo "All requirements found."; exit 0; }
+[ $CHECKONLY = 1 ] && {
+  if index_required; then echo "All requirements found; index data is missing and scripts/01_index_hkdata.sh will run during a build."; else echo "All requirements found."; fi
+  exit 0
+}
+if index_required; then
+  rm -f "$W/done/index"
+  rm -rf "$W/done/index.rooms"
+  echo "== index"
+  : > "$W/logs/index.log"
+  if ! ( step_index ) >> "$W/logs/index.log" 2>&1 < /dev/null; then fail "step 'index'" "$W/logs/index.log"; fi
+  done_mark "index"
+fi
+[ -f "$ROOMS" ] || fail "room list missing after indexing" "$W/logs/index.log"
+echo "HK3DS build: exports in $HKDATA, rooms from $ROOMS ($(grep -c . "$ROOMS")), $JOBS at a time"
 for s in $ALL; do
   [ "$s" = check ] && continue
   is_done "$s" && { echo "== $s (done before)"; continue; }
