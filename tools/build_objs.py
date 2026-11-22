@@ -879,6 +879,8 @@ def found_tags(tree):
 
 def export_room(room, out, force=()):
     path = BR.scene_path(room)
+    if not path:
+        raise FileNotFoundError(f"Cannot find scene: {room}")
     doc = Doc(path)
     ex = Exporter()
     ex.pending_clips = set()
