@@ -258,7 +258,7 @@ install_one() {   # install_one <room>: tools/install_rooms.sh for one room, wit
 step_install() {
   # into romfs/rooms: HKL2 layers, zlib wrapping, camera locks, secret masks; then link every exit to its room
   mkdir -p "$R/rooms"
-  "$TOP/scripts/04_install_rooms.sh" --room-build "$W/rooms" --romfs "$R" $(cat "$ROOMS") || return 1
+  "$TOP/scripts/04_install_rooms.sh" --room-build "$W/rooms" --romfs "$R" --jobs "$JOBS" $(cat "$ROOMS") || return 1
 }
 
 pack_one() {   # pack_one <room>: objects and sprites, then the particle systems and the per-frame collider tables

@@ -24,10 +24,10 @@ def unrle(b):
     return b"".join(out)
 
 
-for p in sys.argv[1:]:
+def convert_layer(p):
     d = unwrap(open(p, "rb").read())
     if d[:4] == b"HKL2":
-        continue
+        return len(d), True
     assert d[:4] == b"HKLY", p
     n, T, S = struct.unpack_from("<HHH", d, 4)
     o = 10
@@ -52,4 +52,9 @@ for p in sys.argv[1:]:
             out.append(z)
     data = b"".join(out)
     open(p, "wb").write(data)
-    print(p.split("/")[-1], len(data) // 1024, "KB")
+    return len(data), False
+
+
+if __name__ == "__main__":
+    for path in sys.argv[1:]:
+        convert_layer(path)

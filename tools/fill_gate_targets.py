@@ -14,12 +14,14 @@ have = {os.path.basename(p)[:-5] for p in glob.glob(os.path.join(R, "*.room"))}
 fixed = 0
 # doors whose own Door Control script holds the destination (Salubra's, the Black Egg Temple's...)
 DOORS = {}
-for l in open(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "door_targets.txt")
-):
-    if l.strip() and not l.startswith("#"):
-        r, g, t = l.split()
-        DOORS[(r, g)] = t
+door_targets = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "door_targets.txt"
+)
+if os.path.isfile(door_targets):
+    for l in open(door_targets):
+        if l.strip() and not l.startswith("#"):
+            r, g, t = l.split()
+            DOORS[(r, g)] = t
 for p in sorted(glob.glob(os.path.join(R, "*.room"))):
     room = os.path.basename(p)[:-5]
     jp = os.path.join(B, room + ".json")

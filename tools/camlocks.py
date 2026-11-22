@@ -53,24 +53,29 @@ def zones(scene_path):
     return out
 
 
-if __name__ == "__main__":
-    out_dir = sys.argv[1]
-    for room in sys.argv[2:]:
-        p = BR.scene_path(room)
-        if not p:
-            print(room, "no scene")
-            continue
-        zs = zones(p)
-        bp = BR.scene_path(room + "_boss")
-        if bp:
-            zs += zones(bp)
-        with open(f"{out_dir}/{room}.cam", "w") as fp:
-            for z in zs:
-                fp.write(
-                    "L "
-                    + " ".join(
-                        "%.3f" % x if isinstance(x, float) else str(x) for x in z
-                    )
-                    + "\n"
+def export(room, out_dir):
+    scene = BR.scene_path(room)
+    if not scene:
+        print(room, "no scene")
+        return 0
+    lock_zones = zones(scene)
+    boss = BR.scene_path(room + "_boss")
+    if boss:
+        lock_zones += zones(boss)
+    with open(f"{out_dir}/{room}.cam", "w") as handle:
+        for zone in lock_zones:
+            handle.write(
+                "L "
+                + " ".join(
+                    "%.3f" % value if isinstance(value, float) else str(value)
+                    for value in zone
                 )
-        print(room, len(zs), "lock zones")
+                + "\n"
+            )
+    print(room, len(lock_zones), "lock zones")
+    return len(lock_zones)
+
+
+if __name__ == "__main__":
+    for room in sys.argv[2:]:
+        export(room, sys.argv[1])
