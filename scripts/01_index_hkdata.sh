@@ -49,6 +49,7 @@ rm -f \
   "$T/data/script_guids.json" \
   "$T/data/cs_sigs.json" \
   "$T/data/fsm_templates.json" \
+  "$T/data/particle_textures.json" \
   "$T/data/all_rooms.txt"
 rm -rf "$T/data/uoroots"
 mkdir -p "$T/data"
@@ -102,6 +103,8 @@ run_timed "make script GUIDs" env HKDATA="$HKDATA" python3 "$T/make_script_guids
 run_timed "make C# signatures" env HKDATA="$HKDATA" python3 "$T/cs_sigs.py" --workers "$WORKERS"
 
 run_timed "make FSM templates" env HKDATA="$HKDATA" python3 "$T/fsm_templates.py" --workers "$WORKERS"
+
+run_timed "make particle textures" env HKDATA="$HKDATA" python3 "$T/make_particle_textures.py" "$HKDATA" --workers "$WORKERS"
 
 run_timed "make alpha cache" env HKDATA="$HKDATA" python3 "$T/alpha_cache.py" --workers "$WORKERS"
 run_timed "match textures" env HKDATA="$HKDATA" python3 "$T/match_textures.py" --all --workers "$WORKERS"

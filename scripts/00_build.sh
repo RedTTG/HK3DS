@@ -220,6 +220,7 @@ index_required() {
     "$T/data/audio_map.json" \
     "$T/data/cs_sigs.json" \
     "$T/data/fsm_templates.json" \
+    "$T/data/particle_textures.json" \
     "$T/data/script_guids.json"
   do
     [ -f "$f" ] || return 0

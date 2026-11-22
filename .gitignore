@@ -36,4 +36,5 @@ __pycache__/
 /tools/data/audio_map.json
 /tools/data/cs_sigs.json
 /tools/data/script_guids.json
+/tools/data/particle_textures.json
 /tools/data/uoroots/
