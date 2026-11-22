@@ -1,9 +1,9 @@
 #!/bin/bash
 # HK3DS: build the game from your own copy of Hollow Knight, start to finish, with one command:
 #
-#   tools/build.sh            the standard version: romfs/, then hk3ds_std.romfs (the game data for the SD card),
+#   scripts/00_build.sh       the standard version: romfs/, then hk3ds_std.romfs (the game data for the SD card),
 #                             hk3ds.3dsx and hk3ds.cia (the code)
-#   tools/build.sh --hd       the HD version as well: romfs_hd/, then hk3ds_hd.romfs and hk3ds_hd.cia
+#   scripts/00_build.sh --hd  the HD version as well: romfs_hd/, then hk3ds_hd.romfs and hk3ds_hd.cia
 #
 # It reads the game exports in $HKDATA (default: the hkdata folder next to this repository's folder, or ./hkdata).
 # Every step writes its own log in work/logs/. When a step fails, the build stops and names the step and its log.
@@ -37,7 +37,7 @@ while [ $# -gt 0 ]; do
     -j*) JOBS=${1#-j}; [ -z "$JOBS" ] && { JOBS=$2; shift; } ;;
     --list) echo "steps: $STEPS"; echo "HD steps (--hd): $HDSTEPS"; exit 0 ;;
     -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "unknown option $1 (tools/build.sh --help)"; exit 2 ;;
+    *) echo "unknown option $1 (scripts/00_build.sh --help)"; exit 2 ;;
   esac
   shift
 done
@@ -160,8 +160,7 @@ install_one() {   # install_one <room>: tools/install_rooms.sh for one room, wit
 step_install() {
   # into romfs/rooms: HKL2 layers, zlib wrapping, camera locks, secret masks; then link every exit to its room
   mkdir -p "$R/rooms"
-  run_rooms install install_one || return 1
-  ( cd "$T" && "$PY" fill_gate_targets.py "$R/rooms" "$W/rooms" && "$PY" patch_gate_conditions.py "$R/rooms" $(cat "$ROOMS") ) || return 1
+  "$TOP/scripts/04_install_rooms.sh" --room-build "$W/rooms" --romfs "$R" $(cat "$ROOMS") || return 1
 }
 
 pack_one() {   # pack_one <room>: objects and sprites, then the particle systems and the per-frame collider tables
@@ -244,11 +243,11 @@ step_hd_compile() {
 # ---------------------------------------------------------------------------------------------------------------
 ALL="$STEPS"; [ $HD = 1 ] && ALL="$STEPS $HDSTEPS"
 if [ -n "$FROM" ]; then
-  case " $STEPS $HDSTEPS " in *" $FROM "*) ;; *) echo "no step '$FROM' (tools/build.sh --list)"; exit 2 ;; esac
+  case " $STEPS $HDSTEPS " in *" $FROM "*) ;; *) echo "no step '$FROM' (scripts/00_build.sh --list)"; exit 2 ;; esac
   on=0; for s in $ALL; do [ "$s" = "$FROM" ] && on=1; [ $on = 1 ] && rm -rf "$W/done/$s" "$W/done/$s.rooms"; done
 fi
 if [ -n "$ONLY" ]; then
-  case " $STEPS $HDSTEPS " in *" $ONLY "*) ;; *) echo "no step '$ONLY' (tools/build.sh --list)"; exit 2 ;; esac
+  case " $STEPS $HDSTEPS " in *" $ONLY "*) ;; *) echo "no step '$ONLY' (scripts/00_build.sh --list)"; exit 2 ;; esac
   rm -rf "$W/done/$ONLY" "$W/done/$ONLY.rooms"; ALL=$ONLY
 fi
 

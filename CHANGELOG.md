@@ -46,7 +46,7 @@ Everything in those rooms runs the game's own scripts (PlayMaker state machines 
   `SD:/3ds/hk3ds/patch/<std|hd>/` (`tools/make_patch.py`: `hk3ds_update_v<ver>_<ed>.zip`; `--record-base` writes the
   release's file lists, `patches/base_v1.1.0/`). Luma game patching is no longer used; an update checks the CIA's code
   against the ELF. The title-screen warnings now speak of the data file (`patch.c`).
-- `tools/build.sh` makes the data files too and says where each file goes on the SD card.
+- `scripts/00_build.sh` makes the data files too and says where each file goes on the SD card.
 
 ## Fixes in v1.0.25 (patch)
 - **False Knight's arena on the Old 3DS: no floor, no boss.** The standard build ran out of memory in Crossroads_10, the
@@ -59,9 +59,9 @@ Everything in those rooms runs the game's own scripts (PlayMaker state machines 
 - **Per-frame hitboxes lost in 25 rooms.** `tools/tk_colliders.py` writes each animated object's per-frame collider
   boxes (`tkbox`) into its room's `.obj`, but nothing ran it after `pack_objs.py`, which writes a fresh `.obj`: the 24
   re-packed rooms of v1.0.24's particle fix (and Crossroads_01) had lost them, so the Mantis Warriors', husks' and the
-  Collector's attack boxes stayed as saved in the scene. Restored; `tools/build.sh` runs it after every pack, and
+  Collector's attack boxes stayed as saved in the scene. Restored; `scripts/00_build.sh` runs it after every pack, and
   `tools/regress.sh` checks that running it again over the rooms changes nothing.
-- **Build tools.** `tools/build.sh` builds everything from the export in one command (see the public README);
+- **Build tools.** `scripts/00_build.sh` builds everything from the export in one command (see the public README);
   `pack_objs.py` creates `romfs/sfx/` itself (a fresh build converted no sounds at all, silently), the Knight's atlas
   comes from the texture dump (`hkcommon.KNIGHT_ATLAS`), `tools/data/` gains `gg_statues.txt` and `music_cues.txt`
   (no tool made them), and `tools/make_icons.py` makes stand-in icons and banners when there are none.

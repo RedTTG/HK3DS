@@ -1,18 +1,24 @@
 #!/bin/bash
 # Copy freshly built rooms (build_room.py output) into romfs and finish them: HKL2 layers, zlib wrapping, camera locks,
-# secret masks.   scripts/04_install_rooms.sh [--build DIR] [Room ...]
+# secret masks.   scripts/04_install_rooms.sh [--build DIR] [--room-build DIR] [--romfs DIR] [Room ...]
 H=$(cd "$(dirname "$0")/.." && pwd); T=$H/tools
 BUILD=$H/build
+ROOM_BUILD=
+ROMFS=
 ROOMS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --build) BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${2:?usage: install_rooms.sh [--build DIR] [ROOM...]}"); shift 2 ;;
     --build=*) BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${1#*=}"); shift ;;
+    --room-build) ROOM_BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${2:?usage: install_rooms.sh [--room-build DIR] [--romfs DIR]}"); shift 2 ;;
+    --room-build=*) ROOM_BUILD=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${1#*=}"); shift ;;
+    --romfs) ROMFS=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${2:?usage: install_rooms.sh [--room-build DIR] [--romfs DIR]}"); shift 2 ;;
+    --romfs=*) ROMFS=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${1#*=}"); shift ;;
     *) ROOMS+=("$1"); shift ;;
   esac
 done
-B=$BUILD
-R=$BUILD/romfs
+B=${ROOM_BUILD:-$BUILD}
+R=${ROMFS:-$BUILD/romfs}
 if [ "${#ROOMS[@]}" -eq 0 ]; then
   mapfile -t ROOMS < "$H/tools/data/all_rooms.txt"
 fi
