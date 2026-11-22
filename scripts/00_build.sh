@@ -50,6 +50,8 @@ if [ -z "$HKDATA" ]; then
 fi
 HKDATA=$(cd "$HKDATA" 2>/dev/null && pwd || echo "$HKDATA"); export HKDATA
 PY=${PYTHON:-python3}
+export PYTHONUNBUFFERED=1
+export PYTHONIOENCODING=utf-8
 [ -n "$DEVKITPRO" ] && export PATH="$DEVKITPRO/tools/bin:${DEVKITARM:-$DEVKITPRO/devkitARM}/bin:$PATH"   # makerom, bannertool, the compiler
 mkdir -p "$W/logs" "$W/done" "$W/obj" "$W/rooms"
 R=$TOP/romfs; RH=$TOP/romfs_hd
@@ -62,6 +64,19 @@ fail() { echo >&3; echo "FAILED: $1" >&3; [ -n "$2" ] && { echo "  log: $2" >&3;
 done_mark() { touch "$W/done/$1"; }
 is_done() { [ -f "$W/done/$1" ]; }
 
+run_logged() {
+  local label=$1
+  local log=$2
+  shift 2
+  echo "== $label" | tee -a "$log"
+  "$@" 2>&1 | tee -a "$log"
+  local status=${PIPESTATUS[0]}
+  if [ "$status" -ne 0 ]; then
+    echo "[exit $status] $label" | tee -a "$log" >&2
+  fi
+  return "$status"
+}
+
 # run_rooms STEP CMD...: run CMD <room> for every room not done yet in STEP (one marker per room, so a long step
 # that stops halfway carries on from the room it stopped at)
 run_rooms() {
@@ -73,13 +88,28 @@ run_rooms() {
     [ -f "$W/logs/$step.failed" ] && break
     printf '\r  %4d/%d  %-50s' "$n" "$tot" "$r" >&3
     if [ "$JOBS" -le 1 ]; then
-      echo "== $r"
-      if ! "$@" "$r" < /dev/null; then echo "room $r failed"; printf '\n  room %s failed\n' "$r" >&3; return 1; fi
+      echo "== $r" | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log"
+      "$@" "$r" < /dev/null 2>&1 | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log"
+      status=${PIPESTATUS[0]}
+      if [ "$status" -ne 0 ]; then
+        echo "[exit $status] room $r" | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log" >&2
+        echo "room $r failed"; printf '\n  room %s failed\n' "$r" >&3
+        return 1
+      fi
       touch "$W/done/$step.rooms/$r"
     else          # --jobs: up to JOBS rooms at once, each with its own log (work/logs/<step>/<room>.log)
       while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n; done
-      ( if "$@" "$r" > "$W/logs/$step/$r.log" 2>&1 < /dev/null; then touch "$W/done/$step.rooms/$r"
-        else echo "$r" >> "$W/logs/$step.failed"; fi ) &
+      (
+        echo "== $r" | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log"
+        "$@" "$r" < /dev/null 2>&1 | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log"
+        status=${PIPESTATUS[0]}
+        if [ "$status" -eq 0 ]; then
+          touch "$W/done/$step.rooms/$r"
+        else
+          echo "[exit $status] room $r" | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log" >&2
+          echo "$r" >> "$W/logs/$step.failed"
+        fi
+      ) &
     fi
   done < "$ROOMS"
   wait
@@ -293,9 +323,8 @@ step_check || fail "requirements: install what's marked MISSING above"
 if index_required; then
   rm -f "$W/done/index"
   rm -rf "$W/done/index.rooms"
-  echo "== index"
   : > "$W/logs/index.log"
-  if ! ( step_index ) >> "$W/logs/index.log" 2>&1 < /dev/null; then fail "step 'index'" "$W/logs/index.log"; fi
+  if ! run_logged "index" "$W/logs/index.log" step_index; then fail "step 'index'" "$W/logs/index.log"; fi
   done_mark "index"
 fi
 [ -f "$ROOMS" ] || fail "room list missing after indexing" "$W/logs/index.log"
@@ -303,9 +332,8 @@ echo "HK3DS build: exports in $HKDATA, rooms from $ROOMS ($(grep -c . "$ROOMS"))
 for s in $ALL; do
   [ "$s" = check ] && continue
   is_done "$s" && { echo "== $s (done before)"; continue; }
-  echo "== $s"
   : > "$W/logs/$s.log"
-  if ! ( step_$s ) >> "$W/logs/$s.log" 2>&1 < /dev/null; then fail "step '$s'" "$W/logs/$s.log"; fi
+  if ! run_logged "$s" "$W/logs/$s.log" "step_$s"; then fail "step '$s'" "$W/logs/$s.log"; fi
   done_mark "$s"
 done
 echo
