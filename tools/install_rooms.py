@@ -49,6 +49,28 @@ def atomic_write(path, text):
     temporary.replace(path)
 
 
+def already_installed(room, room_build, romfs):
+    source = Path(room_build)
+    destination = Path(romfs) / "rooms"
+    room_file = destination / f"{room}.room"
+    if not room_file.is_file():
+        return False
+    if not (destination / f"{room}.cam").is_file():
+        return False
+    source_room = source / f"{room}.room"
+    if source_room.is_file() and room_file.stat().st_mtime_ns < source_room.stat().st_mtime_ns:
+        return False
+    for suffix in ("lyr", "ents.spr", "enemies.spr"):
+        source_path = source / f"{room}.{suffix}" if suffix == "lyr" else source / f"{room}_{suffix}"
+        destination_path = destination / source_path.name
+        if source_path.is_file():
+            if not destination_path.is_file():
+                return False
+            if destination_path.stat().st_mtime_ns < source_path.stat().st_mtime_ns:
+                return False
+    return True
+
+
 def install_one(room, room_build, romfs, tools, status_dir, index):
     output = []
     status_dir = Path(status_dir)
@@ -134,6 +156,18 @@ def main():
     completed_count = 0
     terminal_width = shutil.get_terminal_size((80, 20)).columns
     future_started = {}
+    pending_rooms = [
+        room
+        for room in args.rooms
+        if not already_installed(room, room_build, romfs)
+    ]
+    skipped_count = len(args.rooms) - len(pending_rooms)
+
+    for room in args.rooms:
+        if room not in pending_rooms:
+            atomic_write(status_dir / f"{room}.status", "SKIPPED\n")
+            atomic_write(status_dir / f"{room}.log", "already installed\n")
+            print(f"[install] {room}: SKIPPED", flush=True)
 
     def report_progress(index, room, ok, output):
         nonlocal completed_count
@@ -148,7 +182,7 @@ def main():
             else 0.0
         )
         line = (
-            f"[install {completed_count}/{len(args.rooms)}]"
+            f"[install {completed_count}/{len(pending_rooms)}]"
             f" {room}: {status} ({room_elapsed:.1f}s)"
         )
         print(line[:terminal_width], flush=True)
@@ -158,11 +192,15 @@ def main():
         max_workers=jobs,
         thread_name_prefix="install-room",
     ) as pool:
-        for room in args.rooms:
+        for room in pending_rooms:
             atomic_write(status_dir / f"{room}.status", "PENDING\n")
             atomic_write(status_dir / f"{room}.log", "pending\n")
         futures = {}
-        room_queue = list(enumerate(args.rooms))
+        room_queue = [
+            (index, room)
+            for index, room in enumerate(args.rooms)
+            if room in pending_rooms
+        ]
         completed = {}
         next_queue = 0
 
@@ -209,6 +247,10 @@ def main():
                 report_progress(index, room, ok, output)
                 completed[index] = (room, ok, output)
                 submit_next()
+
+    if not pending_rooms:
+        print(f"Skipped {skipped_count} already-installed rooms")
+        return 0
 
     for index in sorted(completed):
         room, ok, output = completed[index]
