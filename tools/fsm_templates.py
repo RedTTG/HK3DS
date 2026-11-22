@@ -21,25 +21,36 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fsm_extract as F
 from hkcommon import EX, ROOT
 
-
 KINDS = (
-    "floatVariables", "intVariables", "boolVariables", "stringVariables",
-    "vector2Variables", "vector3Variables", "rectVariables",
-    "quaternionVariables", "colorVariables", "gameObjectVariables",
-    "objectVariables", "materialVariables", "textureVariables",
-    "arrayVariables", "enumVariables",
+    "floatVariables",
+    "intVariables",
+    "boolVariables",
+    "stringVariables",
+    "vector2Variables",
+    "vector3Variables",
+    "rectVariables",
+    "quaternionVariables",
+    "colorVariables",
+    "gameObjectVariables",
+    "objectVariables",
+    "materialVariables",
+    "textureVariables",
+    "arrayVariables",
+    "enumVariables",
 )
 TEMPLATE_MARKER = "fsmTemplate:"
 
 
 def signature(fsm: dict) -> tuple:
     variables = fsm.get("variables") or {}
-    return tuple(sorted(
-        (kind, str(variable.get("name")))
-        for kind in KINDS
-        for variable in (variables.get(kind) or [])
-        if isinstance(variable, dict)
-    ))
+    return tuple(
+        sorted(
+            (kind, str(variable.get("name")))
+            for kind in KINDS
+            for variable in (variables.get(kind) or [])
+            if isinstance(variable, dict)
+        )
+    )
 
 
 def iter_asset_files(directory: str) -> Iterable[str]:
@@ -96,8 +107,12 @@ def scan_template_uses(path: str) -> tuple[dict[str, collections.Counter], int]:
 
 
 def main(argv: Iterable[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Map PlayMaker template GUIDs to template assets")
-    parser.add_argument("--quiet", action="store_true", help="only print the final summary")
+    parser = argparse.ArgumentParser(
+        description="Map PlayMaker template GUIDs to template assets"
+    )
+    parser.add_argument(
+        "--quiet", action="store_true", help="only print the final summary"
+    )
     parser.add_argument(
         "--workers",
         type=int,
@@ -109,11 +124,15 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     template_assets: dict[str, tuple[str, tuple]] = {}
     mono_behaviour_dir = os.path.join(EX, "MonoBehaviour")
-    asset_paths = [
-        os.path.join(mono_behaviour_dir, name)
-        for name in os.listdir(mono_behaviour_dir)
-        if name.endswith(".asset")
-    ] if os.path.isdir(mono_behaviour_dir) else []
+    asset_paths = (
+        [
+            os.path.join(mono_behaviour_dir, name)
+            for name in os.listdir(mono_behaviour_dir)
+            if name.endswith(".asset")
+        ]
+        if os.path.isdir(mono_behaviour_dir)
+        else []
+    )
 
     status(f"[1/3] scanning {len(asset_paths)} template candidates", args.quiet)
     with ProcessPoolExecutor(max_workers=worker_count) as pool:
@@ -148,7 +167,10 @@ def main(argv: Iterable[str] | None = None) -> int:
             for guid, counts in found.items():
                 uses[guid].update(counts)
             if not args.quiet and completed % 100 == 0:
-                status(f"  files: {completed}/{len(scene_files)} ({template_files} with templates)", args.quiet)
+                status(
+                    f"  files: {completed}/{len(scene_files)} ({template_files} with templates)",
+                    args.quiet,
+                )
 
     status(f"[3/3] matching {len(uses)} unique template GUIDs", args.quiet)
     output: dict[str, str] = {}
@@ -165,7 +187,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                     pick = candidate
                     break
         if pick:
-            output[guid] = os.path.join('hkdata', os.path.relpath(pick, ROOT)).replace("\\", "/")
+            output[guid] = os.path.join("hkdata", os.path.relpath(pick, ROOT)).replace(
+                "\\", "/"
+            )
             if not output[guid].startswith("../"):
                 pass
         else:
@@ -174,11 +198,16 @@ def main(argv: Iterable[str] | None = None) -> int:
     output_path = Path(__file__).resolve().parent / "data" / "fsm_templates.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = output_path.with_suffix(".json.tmp")
-    temporary_path.write_text(json.dumps(output, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    temporary_path.write_text(
+        json.dumps(output, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     temporary_path.replace(output_path)
 
     for guid, counts, candidate_count in unmatched[:25]:
-        print(f"unmatched {guid} {counts.most_common(2)} candidates={candidate_count}", file=sys.stderr)
+        print(
+            f"unmatched {guid} {counts.most_common(2)} candidates={candidate_count}",
+            file=sys.stderr,
+        )
     if len(unmatched) > 25:
         print(f"unmatched ... {len(unmatched) - 25} more", file=sys.stderr)
     status(

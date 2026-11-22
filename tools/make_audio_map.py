@@ -7,7 +7,6 @@ import os
 import re
 from pathlib import Path
 
-
 MUSIC_CUE_SCRIPT = "400403b587ef0def1b40de34c0f1ebec"
 GUID_RE = re.compile(r"^guid:\s*([0-9a-fA-F]{32})", re.MULTILINE)
 GUID_REF_RE = re.compile(r"guid:\s*([0-9a-fA-F]{32})", re.IGNORECASE)

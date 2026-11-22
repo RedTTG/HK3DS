@@ -8,7 +8,6 @@ import os
 import re
 from pathlib import Path
 
-
 CLASS_RE = re.compile(
     r"^\s*(?:public\s+|internal\s+|protected\s+|private\s+)?"
     r"(?:abstract\s+|sealed\s+|static\s+|partial\s+)*"
@@ -16,27 +15,28 @@ CLASS_RE = re.compile(
     re.MULTILINE,
 )
 NAMESPACE_RE = re.compile(r"^\s*namespace\s+([A-Za-z_][A-Za-z0-9_.]*)", re.MULTILINE)
-FILE_NAMESPACE_RE = re.compile(r"^\s*namespace\s+([A-Za-z_][A-Za-z0-9_.]*)\s*;", re.MULTILINE)
+FILE_NAMESPACE_RE = re.compile(
+    r"^\s*namespace\s+([A-Za-z_][A-Za-z0-9_.]*)\s*;", re.MULTILINE
+)
 
 
 def unity_guid(assembly, namespace, class_name):
     """Unity MD5 script GUID calculation (Assembly-CSharp + namespace + class)."""
-    digest = bytearray(hashlib.md5(
-        (assembly + namespace + class_name).encode("utf-8")
-    ).digest())
+    digest = bytearray(
+        hashlib.md5((assembly + namespace + class_name).encode("utf-8")).digest()
+    )
 
     digest[0:4] = reversed(digest[0:4])
     digest[4:6] = reversed(digest[4:6])
     digest[6:8] = reversed(digest[6:8])
     for i, value in enumerate(digest):
-        digest[i] = ((value << 4) & 0xff) | (value >> 4)
+        digest[i] = ((value << 4) & 0xFF) | (value >> 4)
 
     result = ""
     for offset in range(0, 16, 4):
-        word = int.from_bytes(digest[offset:offset + 4], "little")
+        word = int.from_bytes(digest[offset : offset + 4], "little")
         result += "".join(
-            "0123456789abcdef"[(word >> (shift * 4)) & 0xf]
-            for shift in range(8)
+            "0123456789abcdef"[(word >> (shift * 4)) & 0xF] for shift in range(8)
         )
     return result
 
