@@ -82,6 +82,9 @@ run_logged() {
 run_rooms() {
   local step=$1; shift; local n=0 tot r; tot=$(grep -c . "$ROOMS")
   mkdir -p "$W/done/$step.rooms" "$W/logs/$step"; rm -f "$W/logs/$step.failed"
+  local status_dir="$W/logs/$step/status"
+  rm -rf "$status_dir"
+  mkdir -p "$status_dir"
   while read -r r; do
     [ -z "$r" ] && continue; n=$((n + 1))
     [ -f "$W/done/$step.rooms/$r" ] && continue
@@ -93,7 +96,11 @@ run_rooms() {
       status=${PIPESTATUS[0]}
       if [ "$status" -ne 0 ]; then
         echo "[exit $status] room $r" | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log" >&2
-        echo "room $r failed"; printf '\n  room %s failed\n' "$r" >&3
+        echo "room $r failed with exit $status"
+        echo "  log: $W/logs/$step/$r.log"
+        echo "  last output:"
+        tail -n 30 "$W/logs/$step/$r.log" | sed 's/^/    /'
+        printf '\n  room %s failed (exit %s)\n' "$r" "$status" >&3
         return 1
       fi
       touch "$W/done/$step.rooms/$r"
@@ -106,16 +113,31 @@ run_rooms() {
         if [ "$status" -eq 0 ]; then
           touch "$W/done/$step.rooms/$r"
         else
-          echo "[exit $status] room $r" | tee -a "$W/logs/$step.log" "$W/logs/$step/$r.log" >&2
-          echo "$r" >> "$W/logs/$step.failed"
+          echo "[exit $status] room $r" >> "$W/logs/$step/$r.log"
         fi
+        echo "$status" > "$status_dir/$r.status"
       ) &
     fi
   done < "$ROOMS"
   wait
-  if [ -f "$W/logs/$step.failed" ]; then
-    r=$(head -n 1 "$W/logs/$step.failed"); rm -f "$W/logs/$step.failed"
-    echo "== $r"; cat "$W/logs/$step/$r.log"; echo "room $r failed"; printf '\n  room %s failed\n' "$r" >&3; return 1
+  failed_status=""
+  for status_file in "$status_dir"/*.status; do
+    [ -f "$status_file" ] || continue
+    status=$(cat "$status_file")
+    if [ "$status" -ne 0 ]; then
+      failed_status="$status_file"
+      break
+    fi
+  done
+  if [ -n "$failed_status" ]; then
+    r=$(basename "$failed_status" .status)
+    status=$(cat "$failed_status")
+    echo "room $r failed with exit $status"
+    echo "  log: $W/logs/$step/$r.log"
+    echo "  last output:"
+    tail -n 30 "$W/logs/$step/$r.log" | sed 's/^/    /'
+    printf '\n  room %s failed (exit %s)\n' "$r" "$status" >&3
+    return 1
   fi
   printf '\r  %4d/%d  %-50s\n' "$tot" "$tot" "rooms done" >&3
 }
