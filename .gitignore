@@ -27,3 +27,6 @@ __pycache__/
 # tool output written next to the tools
 tools/data/uoroots/
 tools/data/*.json
+/hkdata/
+/obj/
+/.idea/

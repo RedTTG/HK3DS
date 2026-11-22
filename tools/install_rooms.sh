@@ -13,6 +13,7 @@ for r in "$@"; do
   nice python3 camlocks.py "$R/rooms" "$r" 2>&1 | tail -1
   nice python3 masks.py "$R/rooms" "$r" 2>&1 | tail -1
   [ -f "$R/rooms/${r}_msk.spr" ] && python3 zwrap.py "$R/rooms/${r}_msk.spr" >/dev/null
+  echo "Done with $r"
 done
 # a room built on its own only links exits to rooms built with it: relink every exit to the installed rooms
 python3 fill_gate_targets.py "$R/rooms" "$B" | tail -1

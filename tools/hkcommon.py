@@ -3,6 +3,8 @@ import re, os, glob, pickle, math, functools
 import yaml
 Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 ROOT = os.environ.get('HKDATA', 'hkdata')
+if not os.path.exists(ROOT):
+    raise Exception(f'HKData not found at {ROOT}')
 EX = f'{ROOT}/ex'
 KNIGHT_ATLAS = os.environ.get('KNIGHT_ATLAS', '/mnt/user-data/uploads/Downloads/knight_atlas.png')
 

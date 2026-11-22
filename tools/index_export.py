@@ -10,7 +10,8 @@ import os, re, sys, glob, pickle
 
 ROOT = os.environ.get('HKDATA', 'hkdata')
 EX = f'{ROOT}/ex'
-
+if not os.path.exists(ROOT):
+    raise Exception(f'HKData not found at {ROOT}')
 
 def guid_of(meta):
     m = re.search(r'^guid: ([0-9a-f]+)', open(meta, errors='replace').read(4000), re.M)

@@ -45,6 +45,7 @@ SKIP_ENEMIES = ('Mender Bug', 'Grub', 'Hatcher Baby', 'Bench')
 def scene_path(name):
     for p in [f'{EX}/Scenes/{name}.unity'] + glob.glob(f'{EX}/*/{name}.unity') + glob.glob(f'{EX}/*/*/{name}.unity'):
         if os.path.exists(p): return p
+    print(f"Cannot find scene: {name}")
     return None
 
 MAPZONES = ['NONE', 'TEST_AREA', 'KINGS_PASS', 'CLIFFS', 'TOWN', 'CROSSROADS', 'GREEN_PATH', 'ROYAL_GARDENS', 'FOG_CANYON', 'WASTES',
