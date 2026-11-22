@@ -17,6 +17,7 @@ SOURCES     := source
 DATA        := data
 INCLUDES    := source
 ROMFS       := romfs
+DATAFILE    := hk3ds_std.romfs
 
 APP_TITLE       := Hollow Knight 3DS
 APP_DESCRIPTION := Fan demake (personal use)
@@ -31,6 +32,7 @@ ifeq ($(HD),1)
 TARGET          := hk3ds_hd
 BUILD           := build_hd
 ROMFS           := romfs_hd
+DATAFILE        := hk3ds_hd.romfs
 APP_TITLE       := Hollow Knight 3DS HD
 APP_DESCRIPTION := Fan demake, HD (New 3DS)
 ICON            := icon_hd.png
@@ -78,8 +80,12 @@ export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 export APP_ICON := $(TOPDIR)/$(ICON)
 export _3DSXFLAGS += --smdh=$(CURDIR)/$(TARGET).smdh
+# From v1.1 the game data is a file on the SD card (make data: SD:/3ds/hk3ds/$(DATAFILE)), and the .3dsx / CIA hold only
+# the code. FULL=1 puts the data inside them instead, as before v1.1 (the game uses that when there's no data file).
+ifeq ($(FULL),1)
 ifneq ($(HD),1)
 export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
+endif
 endif
 
 .PHONY: all clean
@@ -114,12 +120,27 @@ endif
 # CIA (needs bannertool + makerom on PATH):  make cia
 #---------------------------------------------------------------------------------
 ifneq ($(BUILD),$(notdir $(CURDIR)))
-.PHONY: cia
+.PHONY: cia data
+# the small CIA: the code, and a RomFS holding only the version (the game data is the data file on the SD card)
+LITE := $(BUILD)/romfs_lite
+ifeq ($(FULL),1)
+CIAROMFS := $(ROMFS)
+else
+CIAROMFS := $(LITE)
+endif
+VERSION = $$(sed -n 's/.*HK3DS_VERSION "\(.*\)"/\1/p' source/version.h)
 cia: all
 	@bannertool makebanner -i $(BANNER) -a cia/banner.wav -o $(BUILD)/banner.bnr
 	@bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i $(ICON) -o $(BUILD)/icon.icn
+	@mkdir -p $(LITE)/text; rm -f $(LITE)/text/version.txt; echo $(VERSION) > $(LITE)/text/version.txt
+	@echo "The game data is SD:/3ds/hk3ds/$(DATAFILE)." > $(LITE)/README.txt
 	@# the data's version: a later code patch over this install can tell it's older (source/patch.c)
-	@V=$$(sed -n 's/.*HK3DS_VERSION "\(.*\)"/\1/p' source/version.h); R=$$(sed -n 's/^ *RootPath *: *//p' $(RSF)); rm -f $$R/text/version.txt; echo $$V > $$R/text/version.txt
-	@makerom -f cia -o $(TARGET).cia -elf $(TARGET).elf -rsf $(RSF) -icon $(BUILD)/icon.icn -banner $(BUILD)/banner.bnr -exefslogo -target t
+	@rm -f $(CIAROMFS)/text/version.txt; echo $(VERSION) > $(CIAROMFS)/text/version.txt
+	@makerom -f cia -o $(TARGET).cia -elf $(TARGET).elf -rsf $(RSF) -DROMFS_DIR=$(CIAROMFS) -icon $(BUILD)/icon.icn -banner $(BUILD)/banner.bnr -exefslogo -target t
 	@echo built ... $(TARGET).cia
+# the game data file for the SD card (SD:/3ds/hk3ds/$(DATAFILE)): $(ROMFS)/ as one RomFS image
+data:
+	@rm -f $(ROMFS)/text/version.txt; echo $(VERSION) > $(ROMFS)/text/version.txt
+	@mkromfs3ds $(ROMFS) $(DATAFILE)
+	@echo built ... $(DATAFILE)
 endif

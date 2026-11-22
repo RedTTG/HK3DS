@@ -1091,10 +1091,11 @@ static bool load_bank(int b, const char *name) {
     Bank *bk = &banks[b];
     char path[96]; snprintf(path, sizeof path, "romfs:/rooms/%s.obj", name);
     size_t sz; char *txt = read_file(path, &sz);
-    if (!txt) return false;
+    if (!txt) { if (b != 1) hk_log("  %s.obj: can't read it (out of memory?)", name); return false; }
     bk->root = json_parse(&bk->arena, txt, sz);
     free(txt);
-    if (!bk->root) { json_free(&bk->arena); return false; }
+    if (!bk->root) { json_free(&bk->arena); hk_log("  %s.obj: out of memory parsing it (%uK of text)", name, (unsigned)(sz / 1024)); return false; }
+    if (b != 1) hk_log("  %s.obj parsed (%uK of text)", name, (unsigned)(sz / 1024));
     snprintf(path, sizeof path, "romfs:/rooms/%s_objs.spr", name);
     if (preSet.loaded && !strcmp(preName, name)) { bk->set = preSet; memset(&preSet, 0, sizeof preSet); preName[0] = 0; }
     else spr_load(&bk->set, path);
@@ -1197,11 +1198,13 @@ bool uo_load_room(const char *room) {
         keep_tree(tree);
         for (int i = 0; i < n; i++) for (int k = 0; k < tree[i]->nfsm; k++) if (!strcmp(tree[i]->fsm[k]->name, "shop_control")) shop_setup(tree[i]);
         start_tree(tree, n);
+        hk_log("  %s: %d objects started", room, n);
     }
     char add[48];
     if (additive_scene(room, add, sizeof add)) {
         curBank = 2;
-        if (load_bank(2, add) && instantiate(2 * TMPL_BANK, true, 0, 0, 0, &tree, &n)) { keep_tree(tree); start_tree(tree, n); }
+        if (load_bank(2, add) && instantiate(2 * TMPL_BANK, true, 0, 0, 0, &tree, &n)) { keep_tree(tree); start_tree(tree, n); hk_log("  %s loaded (%d objects)", add, n); }
+        else hk_log("  %s FAILED to load", add);
         curBank = 0;
     }
     return true;

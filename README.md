@@ -40,92 +40,110 @@ Controls: **B** jump · **Y** nail (Up/Down to aim, hold for nail arts) · **A**
 
 ## Building it
 
-You need:
-- **Hollow Knight** (PC), exported with [AssetRipper](https://github.com/AssetRipper/AssetRipper) (see below).
-- **devkitPro** with `3ds-dev` (`libctru`, `citro2d`, `citro3d`); `bannertool` and `makerom` for CIAs.
-- **Python 3** with `numpy`, `Pillow` and `PyYAML`, and **ffmpeg** (sounds and music).
+The build converts your own copy of Hollow Knight into the port's data, then compiles the game. It's one command, but
+the first build takes a long time: it converts all 480 scenes, which takes hours (most of a day on a slow PC; `--jobs`
+below converts several rooms at once). It needs about 15 GB of free disk space. It's tested on Linux (Ubuntu 24.04);
+on Windows, use WSL.
 
-### 1. Export the game
-Put these in one folder and point `HKDATA` at it (`export HKDATA=/path/to/hkdata`):
+### 1. Install the tools
+On Ubuntu or Debian (or Ubuntu in WSL on Windows):
+```
+sudo apt install git python3 python3-numpy python3-pil python3-yaml python3-cryptography ffmpeg
+```
+Then **devkitPro**, which compiles 3DS programs: follow [devkitPro's Getting Started](https://devkitpro.org/wiki/Getting_Started)
+to install its package manager, then run
+```
+sudo dkp-pacman -S 3ds-dev
+```
+and open a new terminal (that sets `DEVKITPRO` and `DEVKITARM`).
+
+For the `.cia` (the installable version) you also need **makerom**
+([Project_CTR releases](https://github.com/3DSGuy/Project_CTR/releases)) and **bannertool**
+([bannertool](https://github.com/Steveice10/bannertool)). Put both programs in `/opt/devkitpro/tools/bin/` (or anywhere
+on your `PATH`). Without them you still get the `.3dsx`, which runs from the Homebrew Launcher.
+When it's done, the build lists the files and where each one goes on your SD card.
+
+### 2. Export the game
+You need Hollow Knight for PC (Steam or GOG) and [AssetRipper](https://github.com/AssetRipper/AssetRipper/releases).
+1. Start AssetRipper, choose **File → Open Folder** and pick the game's `Hollow Knight_Data` folder (inside the game's
+   install folder). Wait until it has loaded everything.
+2. **Export → Export All Files**, pick an empty folder, and choose **Export Unity Project**. This takes a while.
+3. **Export → Export All Files** again, pick another empty folder, and choose **Export Primary Content**.
+4. Make a folder called `hkdata` next to this repository's folder (so `HK3DS/` and `hkdata/` sit side by side) and
+   put the exports in it like this:
 ```
 hkdata/
-  ex/                  AssetRipper's export of the game as a Unity project (Assets/ contents:
-                       Scenes, GameObject, Sprite, Texture2D, AudioClip, AnimationClip, MonoBehaviour, ...)
-  hs/Texture2D/        every Texture2D of the game dumped as PNG (any names); used to find atlases the
-                       export didn't link to their sprites
-  Assembly-CSharp/     the game's decompiled scripts (AssetRipper's script export)
+  ex/                 everything inside  <Unity project export>/ExportedProject/Assets/
+                      (Scenes, GameObject, MonoBehaviour, Texture2D, Sprite, AudioClip, Font, Resources, ...)
+  Assembly-CSharp/    <Unity project export>/ExportedProject/Assets/Scripts/Assembly-CSharp/  (the game's scripts)
+  hs/Texture2D/       the Texture2D folder of the primary content export (every texture as a .png)
 ```
-Then build the indexes the converters read:
-```
-python tools/index_export.py        # metamaps.pkl, tex2sprites.pkl, meta_AudioClip.pkl in $HKDATA
-python tools/alpha_cache.py         # hs_alpha4.pkl
-python tools/match_textures.py --all
-```
-
-`tools/data/` holds the port's own lookup tables, which the converters read: `audio_map.json` (music and ambience
-cues), `script_guids.json` and `cs_sigs.json` (which game script each component is), `fsm_templates.json`,
-`particle_textures.json` and `uoroots/` (the objects each room converts). They hold no game assets.
-`cs_sigs.json` and `fsm_templates.json` can be rebuilt from your export with `python tools/cs_sigs.py` and
-`python tools/fsm_templates.py`.
-
-### 2. Convert the game into `romfs/`
-Run `scripts/01_index_hkdata.sh [--hkdata hkdata] [--workers 16]` once after exporting HKDATA. It deletes every generated `.pkl` under
-HKDATA, clears the generated JSON lookup maps, and rebuilds the export, audio, C# signature, script GUID, FSM template,
-texture, animation, and `.meta` indexes.
-
-`scripts/03_full_rebuild.sh [--build build]` runs the whole room conversion. The build directory defaults to `build/`; objects,
-room build outputs and the ROM filesystem are stored at `build/objs/`, `build/`, and `build/romfs/`. The room list comes
-from `tools/data/all_rooms.txt`. Its steps are:
-1. `python tools/build_objs.py <objdir> <Room...>`: every live object in a scene (NPCs, enemies, interactables, their
-   PlayMaker FSMs, components, the prefabs they spawn, sounds).
-2. `python tools/build_room.py <out_dir> <Room>`: collision, transitions, entities and the baked parallax art layers.
-3. `scripts/04_install_rooms.sh [--build build] [Room...]` copies and compresses the room files and exports the secret
-   masks (`tools/masks.py`); `python tools/pack_objs.py <objdir> romfs <Room...>` writes `<Room>.obj` and
-   `<Room>_objs.spr` and converts the sounds; then `python tools/obj_particles.py romfs <Room...>` adds the objects'
-   particle systems and sprite materials to that `<Room>.obj` (run it again after every `pack_objs.py`: enemy shots
-   such as the Fungoons' gas are only particles).
-4. Game-wide data: `tools/build_knight.py` (the Knight's state machines), `build_sprites.py`, `build_ui.py`,
-   `build_map.py`, `build_music.py`, `build_journal.py`, `text_sheets.py`, `darkness.py`, `pantheons.py`,
-   `gg_doors.py`, `build_vignette.py`.
-
-The `romfs/` files are zlib-wrapped (`HKZ1` header, `tools/zwrap.py`) and unpacked on the 3DS with tinf.
-
-**HD (`romfs_hd/`)** starts as a hard-linked copy of `romfs/` (`cp -al romfs romfs_hd`); the HD steps replace files in
-it with twice-the-detail versions in the same formats:
-`HK_XD=2 python tools/rebake_layers.py` (room art), `tools/pack_objs_hd.py` (object sprites),
-`HK_XD=2 python tools/build_sprites.py` (Knight and enemies), `tools/build_ui_hd.py` (fonts, HUD, title screen).
+If you keep `hkdata` somewhere else, tell the build where: `export HKDATA=/path/to/hkdata`.
 
 ### 3. Build
+From the repository folder:
 ```
-make            # hk3ds.3dsx (romfs/ embedded)
-make cia        # hk3ds.cia
-make HD=1 cia   # hk3ds_hd.cia (from romfs_hd/, builds in build_hd/)
+tools/build.sh --check     # optional: checks the tools and the export folder, and says what's missing
+tools/build.sh             # the standard version: hk3ds_std.romfs (the game data), hk3ds.3dsx and hk3ds.cia
+tools/build.sh --hd        # the standard version and the HD one (hk3ds_hd.romfs, hk3ds_hd.cia: New 3DS family)
+tools/build.sh --jobs 4    # converts 4 rooms at once: much faster with several CPU cores (1-2 GB of memory each)
 ```
-The CIA needs `icon.png` (48x48) and `cia/banner.png` (256x128) + `cia/banner.wav`; make your own.
+It checks everything it needs first and tells you what's missing and how to install it. Then it runs each step in
+order and shows its progress. If a step fails, the build stops and shows that step's log (`work/logs/<step>.log`).
+Fix the problem and run the same command again: it carries on from where it stopped, so the rooms it already
+converted aren't redone. `tools/build.sh --list` lists the steps, and `--from <step>` redoes a step and everything
+after it.
+
+What the steps do:
+| Step | What it makes |
+|---|---|
+| `index` | indexes of your export that the converters read (`tools/index_export.py`, `alpha_cache.py`, `match_textures.py`) |
+| `objects` | every room's live objects: enemies, NPCs, levers, their state machines and the prefabs they spawn (`build_objs.py`); the Knight's own (`build_knight.py`) |
+| `rooms` | every room's collision, exits and baked parallax art (`build_room.py`); the slowest step |
+| `install` | the rooms in `romfs/rooms/`: compressed, with camera locks, secret masks and linked exits |
+| `pack` | the objects' data, sprites and sounds (`pack_objs.py`), their particle systems (`obj_particles.py`) and per-frame hitboxes (`tk_colliders.py`) |
+| `particles` | the rooms' own particle effects (`particles.py`) |
+| `gamedata` | the Knight's and enemies' sprites, the HUD, fonts, menus, map, Journal, music, text in English and Spanish |
+| `compile` | `hk3ds_std.romfs` (the game data file, `make data`), `hk3ds.3dsx` and `hk3ds.cia` (`make`, `make cia`) |
+| `hd_*` (`--hd`) | `romfs_hd/`: the same data with twice the detail, then `hk3ds_hd.romfs` and `hk3ds_hd.cia` |
+
+The build makes plain stand-in icons and banners (`icon.png`, `cia/banner.png`...) if you don't have your own; put
+your own art there any time. `tools/data/` holds the port's own lookup tables (no game assets): which game script each
+component is, the music cues, the objects each room converts.
 
 ## Installing
-Install the CIA with **FBI** (or over Wi-Fi: `python install/install_with_fbi.py` shows a QR code for FBI's Remote
-Install). Sound needs `SD:/3ds/dspfirm.cdc` (dump it with DSP1).
+From v1.1 the game comes in two parts: a small program (the CIA, or the `.3dsx`) and one big game data file that goes
+on the SD card. Updates after that only replace the small program and a few changed files.
+1. Copy the game data file to `SD:/3ds/hk3ds/`: `hk3ds_std.romfs` for the standard version, `hk3ds_hd.romfs` for HD.
+2. Install `hk3ds.cia` (or `hk3ds_hd.cia`) with **FBI**; it replaces an older install, and your saves stay. Or, for
+   the standard version, put `hk3ds.3dsx` in `SD:/3ds/hk3ds/` and start it from the Homebrew Launcher instead.
+3. Sound needs `SD:/3ds/dspfirm.cdc` (dump it with DSP1).
+
+Coming from v1.0.x? Delete the game's folders in `SD:/luma/titles/` (`000400000F4C3D00` for the standard version,
+`000400000F4C3E00` for HD) if your earlier patches left them there: Luma would otherwise keep running the old code,
+which can't find the new data file. The old `SD:/3ds/hk3ds/patch/` folder can go too.
+
+If the game says its data is missing, the data file isn't in `SD:/3ds/hk3ds/` or has another name.
 
 The HD build needs the New 3DS's full 124 MB. If line 2 of `SD:/3ds/hk3ds/log.txt` says `low memory`, turn off
 Luma3DS's "New 3DS CPU" setting (hold SELECT at boot): both builds already run at 804 MHz with the L2 cache.
+`make FULL=1` (and `make FULL=1 cia`) still builds the old all-in-one `.3dsx` / CIA with the data inside.
 
-## Updating without reinstalling
-From v1.0.22, updates come as a small patch zip over the installed CIA. From v1.0.23 there is one zip per version
-(`hk3ds_patch_v<version>_std.zip` for the standard CIA, `_hd.zip` for the HD one): use the one for the CIA you have.
-1. Copy the zip's `luma` and `3ds` folders to the root of the SD card.
-2. Turn on Luma3DS's **Enable game patching** (hold SELECT while powering on, select it, START to save).
+## Updating
+Updates come as one zip per version, `hk3ds_update_v<version>_std.zip` or `_hd.zip`:
+1. Copy the zip's `3ds` folder to the root of the SD card (merge it, replace files).
+2. Install the zip's CIA with FBI (or use its `.3dsx`).
 3. The title screen shows the new version.
 
-The new code goes in through Luma's game patching (`SD:/luma/titles/<title id>/code.bin` and `exheader.bin`;
-standard `000400000F4C3D00`, HD `000400000F4C3E00`). Data files changed since the CIA release go in
-`SD:/3ds/hk3ds/patch/std|hd/`, and the game reads them from there instead of the CIA (`source/patch.c`). Patches are
-cumulative, and a patch's data is only used by the version it was made for. If you install a newer full CIA later,
-delete the title's folder in `SD:/luma/titles`; the title screen warns you if an old patch is still loaded.
+The data file stays as it was. Files changed since its release go in `SD:/3ds/hk3ds/patch/std|hd/`, and the game reads
+them from there instead of the data file (`source/patch.c`). Updates are cumulative, and an update's files are only
+used by the version they were made for; the title screen warns you when the data file is another version than the
+update expects.
 
-`tools/make_patch.py` builds a patch from your two ELFs and the file lists of the CIAs you released
-(`tools/ctrfile.py romfs X.cia list.txt`). It checks the code against the ELF, because Luma halts the console on a
-malformed `code.bin`.
+`tools/make_patch.py` builds an update from the small CIAs (`make cia`, `make HD=1 cia`) and the file lists of the data
+files you released (`tools/make_patch.py --record-base patches/base_v<version>` when you release one). Before v1.1, the
+code went in through Luma3DS's game patching (`SD:/luma/titles/<title id>/code.bin`); the tool still makes those
+patches for a base release older than v1.1.
 
 ## Testing without a 3DS
 `host/` is a small software stand-in for libctru and citro2d that runs the real game code on a PC, headless, with
@@ -135,7 +153,7 @@ gcc -O2 -w -Ihost -Isource -D__HOST__ source/*.c host/host.c -lm -lpthread -o ho
 HK_SCRIPT="150:;1:A;40:;1:A;200:RIGHT" HK_SHOTS="300" ./host/hk3ds_host     # -> shots/f00300.png
 HK_START="Crossroads_10 -1 -1" ./host/hk3ds_host                             # start a new game in any room
 ```
-`scripts/05_regress.sh [--build build]` runs the regression scenes. `tools/emu/` has a libretro front end (`hkrec.c`) that runs the real
+`tools/regress.sh` runs the regression scenes. `tools/emu/` has a libretro front end (`hkrec.c`) that runs the real
 `.3dsx` in the Azahar core with scripted input and records video and sound (`HK_REC_LEN` starts when a room fades in).
 Azahar's software renderer shows only half of the New 3DS's 800-pixel wide mode; `tools/emu/azahar-wide-mode.patch`
 fixes that for HD recordings.

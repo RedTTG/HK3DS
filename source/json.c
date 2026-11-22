@@ -1,6 +1,7 @@
 #include "json.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 static void *aalloc(JArena *a, size_t n) {
     n = (n + 7) & ~(size_t)7;
@@ -21,6 +22,33 @@ void json_free(JArena *a) {
     char *b = a->mem;
     while (b) { char *prev = *(char **)b; free(b); b = prev; }
     a->mem = NULL; a->used = a->cap = 0;
+    free(a->itab); a->itab = NULL; a->icap = a->icount = 0;
+}
+
+// string interning: keys ("type", "var", "enabled"...) and values repeat thousands of times in a room's file
+static unsigned shash(const char *t, size_t n) { unsigned h = 2166136261u; while (n--) h = (h ^ (unsigned char)*t++) * 16777619u; return h; }
+static bool itab_grow(JArena *a) {
+    unsigned nc = a->icap ? a->icap * 2 : 4096;
+    const char **nt = calloc(nc, sizeof *nt); if (!nt) return false;
+    for (unsigned i = 0; i < a->icap; i++) if (a->itab[i]) {
+        unsigned h = shash(a->itab[i], strlen(a->itab[i])) & (nc - 1);
+        while (nt[h]) h = (h + 1) & (nc - 1);
+        nt[h] = a->itab[i];
+    }
+    free(a->itab); a->itab = nt; a->icap = nc;
+    return true;
+}
+static const char *intern(JArena *a, const char *t, size_t n) {
+    if ((a->icount + 1) * 4 > a->icap * 3 && !itab_grow(a)) {     // no memory for the table: just store it
+        char *o = aalloc(a, n + 1); if (!o) return NULL; memcpy(o, t, n); o[n] = 0; return o;
+    }
+    unsigned h = shash(t, n) & (a->icap - 1);
+    for (const char *e; (e = a->itab[h]); h = (h + 1) & (a->icap - 1))
+        if (!strncmp(e, t, n) && !e[n]) return e;
+    char *o = aalloc(a, n + 1); if (!o) return NULL;
+    memcpy(o, t, n); o[n] = 0;
+    a->itab[h] = o; a->icount++;
+    return o;
 }
 
 typedef struct { const char *p, *e; JArena *a; } P;
@@ -34,7 +62,10 @@ static const char *pstring(P *s) {
     size_t extra = 0;
     while (s->p < s->e && *s->p != '"') { if (*s->p == '\\') { s->p++; extra++; } s->p++; }
     size_t n = s->p - st;
-    char *out = aalloc(s->a, n + 1), *o = out;
+    char tmp[256];
+    bool shared = n < sizeof tmp;                                           // short strings are shared (intern)
+    char *own = shared ? NULL : aalloc(s->a, n + 1);                         // long ones get their own copy
+    char *out = shared ? tmp : own, *o = out;
     if (!out) return "";
     for (const char *q = st; q < s->p; q++) {
         if (*q == '\\' && q + 1 < s->p) {
@@ -53,7 +84,8 @@ static const char *pstring(P *s) {
     }
     *o = 0; (void)extra;
     if (s->p < s->e) s->p++;
-    return out;
+    if (shared) { const char *r = intern(s->a, tmp, (size_t)(o - tmp)); return r ? r : ""; }
+    return own;
 }
 
 static JVal *pvalue(P *s);
@@ -99,7 +131,9 @@ static JVal *pvalue(P *s) {
 
 JVal *json_parse(JArena *a, const char *text, size_t len) {
     P s = { text, text + len, a };
-    return pvalue(&s);
+    JVal *r = pvalue(&s);
+    free(a->itab); a->itab = NULL; a->icap = a->icount = 0;       // the strings stay; only the lookup table goes
+    return r;
 }
 
 JVal *jget(const JVal *o, const char *key) {

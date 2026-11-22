@@ -16,16 +16,13 @@ Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 ROOT = Path(os.environ.get("HKDATA", "hkdata"))
 ROOT = (
     (ROOT if ROOT.is_absolute() else root_folder / ROOT)
-    .relative_to(root_folder)
-    .as_posix()
 )
 if not os.path.exists(ROOT):
     raise Exception(f"HKData not found at {ROOT}")
 EX = f"{ROOT}/ex"
 KNIGHT_ATLAS = os.environ.get(
-    "KNIGHT_ATLAS", "/mnt/user-data/uploads/Downloads/knight_atlas.png"
+    "KNIGHT_ATLAS", f"{ROOT}/hs/Texture2D/atlas0_325.png"
 )
-
 
 def load_yaml_docs(path):
     src = open(path, encoding="utf-8").read()

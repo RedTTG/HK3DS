@@ -45,13 +45,13 @@ static FILE *open_raw(const char *path, const char *mode) {
 void hk_patch_init(void) {
     if (state) return;
     state = 1;
-    // a full install newer than this code means Luma is still loading an old patch's code.bin
+    // game data newer than this code: an old CIA or .3dsx is running it, or Luma still loads an old patch's code.bin
     FILE *v = open_raw("romfs:/text/version.txt", "rb");
     if (v) {
         char base[24] = "";
         if (fscanf(v, "%23s", base) == 1 && vercmp(base, HK3DS_VERSION) > 0)
-            snprintf(warning, sizeof warning, "v%s is installed, but an old patch (v%s) is loaded over it.\n"
-                     "Delete its folder in SD:/luma/titles (named in README_PATCH.txt).", base, HK3DS_VERSION);
+            snprintf(warning, sizeof warning, "The game data is v%s, but this is the older v%s.\n"
+                     "Install the new CIA, and delete any folder for it in SD:/luma/titles.", base, HK3DS_VERSION);
         fclose(v);
     }
     FILE *f = open_raw(PATCH_DIR "files.txt", "rb");
@@ -86,8 +86,8 @@ void hk_patch_init(void) {
     state = 2;
     hk_log("patch v%s: %d files, installed data %s", ver, nnames, baseBad ? "DIFFERENT" : baseN ? "matches" : "not checked");
     if (baseBad && !warning[0])
-        snprintf(warning, sizeof warning, "This patch is for the %s CIA, and a different\n"
-                 "version is installed: reinstall the %s CIA.", HK3DS_PATCH_BASE, HK3DS_PATCH_BASE);
+        snprintf(warning, sizeof warning, "This update is for the %s game data, and the data\n"
+                 "file is another version: put the %s " HK3DS_DATAFILE " in SD:/3ds/hk3ds.", HK3DS_PATCH_BASE, HK3DS_PATCH_BASE);
 }
 
 bool hk_patch_path(const char *path, char *out, size_t size) {

@@ -18,6 +18,8 @@ romfs_*/
 *.png
 build/
 build_hd/
+work/
+hkdata/
 shots/
 sdmc/
 previews/

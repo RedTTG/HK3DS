@@ -334,11 +334,20 @@ static struct { char sup[48], main[48], sub[48]; float a; bool up; Fsm *pending;
 // Area Title Control starts in "Pause" (NextFrameEvent): the NPC FSM sets "NPC Title" / "Area Event" right after
 // activating the object, so the variables are read a frame later
 void title_npc(Fsm *at) { T.pending = at; T.pendFrames = 1; }
+void title_area(const char *ev, bool visited, bool right);
 static void title_npc_now(Fsm *at) {
     FVar *nt = fsm_var(at, "NPC Title");
-    if (!nt || !nt->b) return;
     FVar *ev = fsm_var(at, "Area Event");
     if (!ev || !ev->s[0]) return;
+    if (!nt || !nt->b) {
+        // Area Title Control's area branch: a boss fight activates the title with "Visited" and "Display Right" set
+        // (FalseyControl's "Music" state: FALSE_KNIGHT), which shows the boss's name in the corner. The object goes
+        // inactive again (the title's FSM ends that way) so the next fight's activation shows its name too
+        FVar *vis = fsm_var(at, "Visited"), *dr = fsm_var(at, "Display Right");
+        title_area(ev->s, vis && vis->b, dr && dr->b);
+        if (at->owner) at->owner->activeSelf = false;
+        return;
+    }
     char k[80];
     snprintf(k, sizeof k, "%s_MAIN", ev->s); snprintf(T.main, sizeof T.main, "%s", lang_get_or_key(k, "Titles"));
     snprintf(k, sizeof k, "%s_SUB", ev->s); snprintf(T.sub, sizeof T.sub, "%s", lang_get_or_key(k, "Titles"));
