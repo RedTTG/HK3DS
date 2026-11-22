@@ -1,5 +1,7 @@
 # Shared helpers for reading the AssetRipper export of Hollow Knight.
 import re, os, glob, pickle, math, functools
+from concurrent.futures import ThreadPoolExecutor
+from parallel_helpers import interruptible_main, parallel_executor
 from pathlib import Path
 
 import yaml
@@ -46,11 +48,23 @@ def metamap(folder):
     if os.path.exists(cache):
         return pickle.load(open(cache, "rb"))
     g = {}
-    for m in glob.glob(f"{EX}/{folder}/*.meta"):
-        r = re.search(r"guid: ([0-9a-f]+)", open(m).read(2000))
-        if r:
-            g[r.group(1)] = m[:-5]
-    pickle.dump(g, open(cache, "wb"))
+    metas = glob.glob(f"{EX}/{folder}/*.meta")
+
+    def read_meta(meta):
+        with open(meta, "rb") as handle:
+            text = handle.read(2000).decode("utf-8", "replace")
+        match = re.search(r"guid: ([0-9a-f]+)", text)
+        if not match:
+            return None, None
+        return match.group(1), meta[:-5]
+
+    workers = min(16, (os.cpu_count() or 1) * 2)
+    with parallel_executor(ThreadPoolExecutor, max_workers=workers) as pool:
+        for guid, path in pool.map(read_meta, metas):
+            if guid:
+                g[guid] = path
+    with open(cache, "wb") as handle:
+        pickle.dump(g, handle)
     return g
 
 

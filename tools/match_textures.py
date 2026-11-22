@@ -1,5 +1,8 @@
 # Resolve texture GUIDs with no .meta (hksprites export) -> PNG path. Usage: match_textures.py scene.unity ...
+import argparse
 import pickle, os, re, sys, collections, struct, glob
+from concurrent.futures import ThreadPoolExecutor
+from parallel_helpers import interruptible_main, parallel_executor
 import numpy as np
 
 ROOT = os.environ.get("HKDATA", "hkdata")
@@ -25,7 +28,12 @@ prev = (
 )
 missing = {k: v for k, v in by.items() if k not in tex and k not in prev}
 need = set()
-for sc in ([] if sys.argv[1:] == ["--all"] else sys.argv[1:]):
+parser = argparse.ArgumentParser()
+parser.add_argument("scenes", nargs="*", help="scene or prefab files to target")
+parser.add_argument("--all", action="store_true", help="resolve every missing texture")
+parser.add_argument("--workers", type=int, default=min(16, (os.cpu_count() or 1) * 2))
+args = parser.parse_args()
+for sc in ([] if args.all else args.scenes):
     refs = set(
         re.findall(
             r"(?:m_Sprite|sprite): \{fileID: \d+, guid: ([0-9a-f]+)", open(sc).read()
@@ -34,18 +42,19 @@ for sc in ([] if sys.argv[1:] == ["--all"] else sys.argv[1:]):
     for tg, L in missing.items():
         if any(x[2] in refs for x in L):
             need.add(tg)
-if sys.argv[1:] == ["--all"]:
+if args.all:
     need = set(missing)
 res = {}
-for tg in need:
+
+
+def resolve_texture(tg):
     L = missing[tg]
     rects = [r for _, r, _ in L if r]
     names = [n for n, _, _ in L]
     if not rects:
-        continue
+        return tg, None, (0, None)
     if len(L) == 1 and names[0] in byname:
-        res[tg] = byname[names[0]][0]
-        continue
+        return tg, byname[names[0]][0], (1.0, byname[names[0]][0])
     mx = max(r[0] + r[2] for r in rects)
     my = max(r[1] + r[3] for r in rects)
     best = None
@@ -98,17 +107,26 @@ for tg in need:
         sc = inside - outside - 0.5 * ringv
         if best is None or sc > best[0]:
             best = (sc, p)
-    if best and best[0] > 0.3:
-        res[tg] = best[1]
-    print(
-        tg,
-        len(L),
-        names[:3],
-        "->",
-        os.path.basename(best[1]) if best else None,
-        round(best[0], 3) if best else None,
-        flush=True,
-    )
+    resolved = best[1] if best and best[0] > 0.3 else None
+    score = best[0] if best else None
+    return tg, resolved, (len(L), names[:3], score, resolved)
+
+
+with parallel_executor(ThreadPoolExecutor, max_workers=max(1, args.workers)) as pool:
+    for tg, resolved, details in pool.map(resolve_texture, sorted(need)):
+        if resolved:
+            res[tg] = resolved
+        if isinstance(details, tuple) and len(details) == 4:
+            count, names, score, path = details
+            print(
+                tg,
+                count,
+                names,
+                "->",
+                os.path.basename(path) if path else None,
+                round(score, 3) if score is not None else None,
+                flush=True,
+            )
 prev.update(res)
 pickle.dump(prev, open(f"{ROOT}/hs_texmatch.pkl", "wb"))
 print("resolved", len(res), "of", len(need))

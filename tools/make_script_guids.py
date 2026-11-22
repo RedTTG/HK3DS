@@ -6,7 +6,9 @@ import hashlib
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from parallel_helpers import interruptible_main, parallel_executor
 
 CLASS_RE = re.compile(
     r"^\s*(?:public\s+|internal\s+|protected\s+|private\s+)?"
@@ -56,25 +58,32 @@ def brace_namespace(text):
     return ""
 
 
-def find_classes(source_dir):
+def find_classes(source_dir, workers=None):
     classes = set()
-    for path in sorted(source_dir.rglob("*.cs")):
-        text = path.read_text(encoding="utf-8", errors="replace")
+    paths = sorted(source_dir.rglob("*.cs"))
 
+    def parse(path):
+        text = path.read_text(encoding="utf-8", errors="replace")
         namespace = brace_namespace(text)
         assembly = "Assembly-CSharp"
-
         if "Assembly-CSharp-firstpass" in str(path):
             assembly = "Assembly-CSharp-firstpass"
-
+        found = set()
         for match in CLASS_RE.finditer(text):
             class_name = match.group(1)
-            classes.add((assembly, namespace, class_name))
+            found.add((assembly, namespace, class_name))
+        return found
+
+    if workers is None:
+        workers = min(16, (os.cpu_count() or 1) * 2)
+    with parallel_executor(ThreadPoolExecutor, max_workers=workers) as pool:
+        for found in pool.map(parse, paths):
+            classes.update(found)
 
     return sorted(classes)
 
 
-def make_map(hkdata):
+def make_map(hkdata, workers=None):
     source_dir = hkdata / "Assembly-CSharp"
     if not source_dir.is_dir():
         raise FileNotFoundError(
@@ -82,7 +91,7 @@ def make_map(hkdata):
         )
 
     result = {}
-    for assembly, namespace, class_name in find_classes(source_dir):
+    for assembly, namespace, class_name in find_classes(source_dir, workers):
         guid = unity_guid(assembly, namespace, class_name)
         result[guid] = class_name
 
@@ -109,10 +118,11 @@ def main():
         default=None,
         help="output JSON path (default: tools/data/script_guids.json)",
     )
+    parser.add_argument("--workers", type=int, default=min(16, (os.cpu_count() or 1) * 2))
     args = parser.parse_args()
 
     hkdata = Path(args.hkdata).expanduser().resolve()
-    result = make_map(hkdata)
+    result = make_map(hkdata, max(1, args.workers))
 
     output = (
         Path(args.output).expanduser().resolve()
@@ -126,4 +136,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(interruptible_main(main))

@@ -11,6 +11,8 @@ clip's name matches the object's name ("Splat Explode Orange" -> splat_explode_o
 """
 
 import os, re, glob, pickle, functools
+from concurrent.futures import ThreadPoolExecutor
+from parallel_helpers import interruptible_main, parallel_executor
 from hkcommon import EX, ROOT
 
 ATTRS = {
@@ -110,12 +112,21 @@ def index():
     if os.path.exists(cache):
         return pickle.load(open(cache, "rb"))
     clips = []
-    for f in sorted(glob.glob(f"{EX}/AnimationClip/*.anim")):
+    paths = sorted(glob.glob(f"{EX}/AnimationClip/*.anim"))
+
+    def parse(path):
         try:
-            clips.append(parse_clip(f))
+            return parse_clip(path)
         except Exception:
-            pass
-    pickle.dump(clips, open(cache, "wb"))
+            return None
+
+    workers = min(16, (os.cpu_count() or 1) * 2)
+    with parallel_executor(ThreadPoolExecutor, max_workers=workers) as pool:
+        for clip in pool.map(parse, paths):
+            if clip is not None:
+                clips.append(clip)
+    with open(cache, "wb") as handle:
+        pickle.dump(clips, handle)
     return clips
 
 

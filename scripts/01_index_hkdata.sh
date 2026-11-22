@@ -3,16 +3,35 @@
 #   scripts/01_index_hkdata.sh [--hkdata DIR]
 set -euo pipefail
 
+trap 'echo "Interrupted: stopping HKDATA indexing." >&2; exit 130' INT TERM
+
+START_TIME=$(python3 -c 'import time; print(time.monotonic())')
+
+run_timed() {
+  local label=$1
+  shift
+  local step_start step_end elapsed
+  echo "== $label"
+  step_start=$(python3 -c 'import time; print(time.monotonic())')
+  "$@" || return
+  step_end=$(python3 -c 'import time; print(time.monotonic())')
+  elapsed=$(python3 -c 'import sys; print(f"{float(sys.argv[2]) - float(sys.argv[1]):.2f}s" if float(sys.argv[2]) >= float(sys.argv[1]) else "0.00s")' "$step_start" "$step_end")
+  echo "[$label] $elapsed"
+}
+
 H=$(cd "$(dirname "$0")/.." && pwd)
 T=$H/tools
 HKDATA=${HKDATA:-$H/hkdata}
+WORKERS=$(python3 -c 'import os; print(max(1, min(16, (os.cpu_count() or 1) * 2)))')
 cd "$H"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --hkdata) HKDATA=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${2:?usage: 01_index_hkdata.sh [--hkdata DIR]}"); shift 2 ;;
     --hkdata=*) HKDATA=$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${1#*=}"); shift ;;
-    *) echo "usage: 01_index_hkdata.sh [--hkdata DIR]" >&2; exit 2 ;;
+    --workers) WORKERS=${2:?usage: 01_index_hkdata.sh [--hkdata DIR] [--workers COUNT]}; shift 2 ;;
+    --workers=*) WORKERS=${1#*=}; shift ;;
+    *) echo "usage: 01_index_hkdata.sh [--hkdata DIR] [--workers COUNT]" >&2; exit 2 ;;
   esac
 done
 
@@ -31,40 +50,36 @@ rm -f \
   "$T/data/cs_sigs.json" \
   "$T/data/fsm_templates.json"
 
-echo "== index export"
-HKDATA="$HKDATA" python3 "$T/index_export.py" "$HKDATA"
+run_timed "index export" env HKDATA="$HKDATA" python3 "$T/index_export.py" "$HKDATA" --workers "$WORKERS"
 
-echo "== make audio map"
-HKDATA="$HKDATA" python3 "$T/make_audio_map.py" "$HKDATA"
+run_timed "make audio map" env HKDATA="$HKDATA" python3 "$T/make_audio_map.py" "$HKDATA" --workers "$WORKERS"
 
-echo "== make script GUIDs"
-HKDATA="$HKDATA" python3 "$T/make_script_guids.py" "$HKDATA"
+run_timed "make script GUIDs" env HKDATA="$HKDATA" python3 "$T/make_script_guids.py" "$HKDATA" --workers "$WORKERS"
 
-echo "== make C# signatures"
-HKDATA="$HKDATA" python3 "$T/cs_sigs.py"
+run_timed "make C# signatures" env HKDATA="$HKDATA" python3 "$T/cs_sigs.py" --workers "$WORKERS"
 
-echo "== make FSM templates"
-HKDATA="$HKDATA" python3 "$T/fsm_templates.py" --quiet
+run_timed "make FSM templates" env HKDATA="$HKDATA" python3 "$T/fsm_templates.py" --workers "$WORKERS"
 
-echo "== make texture caches"
-HKDATA="$HKDATA" python3 "$T/alpha_cache.py"
-HKDATA="$HKDATA" python3 "$T/match_textures.py" --all
+run_timed "make alpha cache" env HKDATA="$HKDATA" python3 "$T/alpha_cache.py" --workers "$WORKERS"
+run_timed "match textures" env HKDATA="$HKDATA" python3 "$T/match_textures.py" --all --workers "$WORKERS"
 
-echo "== make animation cache"
-HKDATA="$HKDATA" python3 - <<'PY'
+run_timed "make animation cache" env HKDATA="$HKDATA" python3 - <<'PY'
 import sys
 sys.path.insert(0, "tools")
 import uanim
 uanim.index()
 PY
 
-echo "== make .meta caches"
-HKDATA="$HKDATA" python3 - <<'PY'
+run_timed "make .meta caches" env HKDATA="$HKDATA" python3 - <<'PY'
 import sys
+from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, "tools")
 from hkcommon import metamap
-for folder in ("AudioClip", "GameObject", "Material", "MonoBehaviour", "Sprite", "Texture2D"):
-    metamap(folder)
+folders = ("AudioClip", "GameObject", "Material", "MonoBehaviour", "Sprite", "Texture2D")
+with ThreadPoolExecutor(max_workers=min(6, len(folders))) as pool:
+    list(pool.map(metamap, folders))
 PY
 
-echo "DONE: HKDATA indexed"
+END_TIME=$(python3 -c 'import time; print(time.monotonic())')
+TOTAL=$(python3 -c 'import sys; print(f"{float(sys.argv[2]) - float(sys.argv[1]):.2f}s")' "$START_TIME" "$END_TIME")
+echo "DONE: HKDATA indexed in $TOTAL"

@@ -13,10 +13,10 @@ import json
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from parallel_helpers import interruptible_main, parallel_executor
 from pathlib import Path
 from typing import Iterable
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import fsm_extract as F
 from hkcommon import EX, ROOT
@@ -135,7 +135,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
 
     status(f"[1/3] scanning {len(asset_paths)} template candidates", args.quiet)
-    with ProcessPoolExecutor(max_workers=worker_count) as pool:
+    with parallel_executor(ProcessPoolExecutor, max_workers=worker_count) as pool:
         futures = {pool.submit(scan_template_asset, path): path for path in asset_paths}
         completed = 0
         for future in as_completed(futures):
@@ -156,7 +156,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     uses: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     scanned = 0
     template_files = 0
-    with ProcessPoolExecutor(max_workers=worker_count) as pool:
+    with parallel_executor(ProcessPoolExecutor, max_workers=worker_count) as pool:
         futures = {pool.submit(scan_template_uses, path): path for path in scene_files}
         completed = 0
         for future in as_completed(futures):
@@ -219,4 +219,4 @@ def main(argv: Iterable[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(interruptible_main(main))

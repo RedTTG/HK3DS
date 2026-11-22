@@ -69,7 +69,7 @@ cues), `script_guids.json` and `cs_sigs.json` (which game script each component 
 `python tools/fsm_templates.py`.
 
 ### 2. Convert the game into `romfs/`
-Run `scripts/01_index_hkdata.sh [--hkdata hkdata]` once after exporting HKDATA. It deletes every generated `.pkl` under
+Run `scripts/01_index_hkdata.sh [--hkdata hkdata] [--workers 16]` once after exporting HKDATA. It deletes every generated `.pkl` under
 HKDATA, clears the generated JSON lookup maps, and rebuilds the export, audio, C# signature, script GUID, FSM template,
 texture, animation, and `.meta` indexes.
 
