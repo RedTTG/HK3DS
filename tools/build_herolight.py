@@ -15,11 +15,20 @@ import bake_scene as B
 import build_room as BR
 from texpack import MORTON
 
-HAZE2 = "b04b22f2cc0b98f4992e9b4a31714b97"
+HAZE2 = "2151c9af9d85f9642bf0793bd6c7c1fc"
 SCALE = 3.0  # the HeroLight transform's scale
 romfs = sys.argv[1]
 sp = B.sprite_asset(HAZE2)
-im, offx, offy, rw, rh, pivx, pivy, ppu = B.sprite_image(sp)
+if sp is None:
+    for guid, path in B.metamap("Sprite").items():
+        if os.path.splitext(os.path.basename(path))[0].lower() in ("haze2", "haze"):
+            sp = B.sprite_asset(guid)
+            if sp:
+                break
+r = B.sprite_image(sp) if sp else None
+if not r:
+    sys.exit("Cannot resolve HeroLight haze2 sprite texture")
+im, offx, offy, rw, rh, pivx, pivy, ppu = r
 al = np.asarray(im.convert("RGBA"))[..., 3]
 lum = np.asarray(im.convert("RGBA"))[..., :3].astype(np.float32).max(-1) / 255.0
 a = (al.astype(np.float32) * lum).clip(
