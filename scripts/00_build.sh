@@ -262,19 +262,9 @@ step_install() {
   "$TOP/scripts/04_install_rooms.sh" --room-build "$W/rooms" --romfs "$R" --jobs "$JOBS" $(cat "$ROOMS") || return 1
 }
 
-pack_one() {   # pack_one <room>: objects and sprites, then the particle systems and the per-frame collider tables
-  local r=$1
-  "$PY" "$T/pack_objs.py" "$W/obj" "$R" "$r" || return 1
-  [ -f "$R/rooms/${r}_objs.spr" ] && { "$PY" "$T/zwrap.py" "$R/rooms/${r}_objs.spr" || return 1; }
-  # pack_objs.py writes a fresh <Room>.obj: these two have to run again after it, every time
-  "$PY" "$T/obj_particles.py" "$R" "$r" || return 1
-  [ -f "$R/rooms/$r.obj" ] && { "$PY" "$T/tk_colliders.py" "$R/rooms/$r.obj" || return 1; }
-  return 0
-}
 step_pack() {
   mkdir -p "$R/sfx"
-  echo "== _Knight"; pack_one _Knight || return 1
-  run_rooms pack pack_one
+  "$PY" "$T/pack_rooms.py" --objdir "$W/obj" --romfs "$R" --jobs "$JOBS" _Knight $(cat "$ROOMS") || return 1
 }
 
 step_particles() {

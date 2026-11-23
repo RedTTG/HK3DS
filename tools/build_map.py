@@ -119,6 +119,8 @@ def pin_line(room, go, cs, tr, rx, ry, rsx, rsy, ss, P):
 
 
 def main(romfs):
+    os.makedirs(f"{romfs}/text", exist_ok=True)
+    os.makedirs(f"{romfs}/gfx", exist_ok=True)
     objs = F.load_objs(f"{B.EX}/GameObject/Game_Map.prefab")
     P = F.Paths(objs)
     gm = next(

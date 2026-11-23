@@ -129,7 +129,14 @@ def load_objs_text(src: str) -> dict[int, tuple[str, dict[str, Any]]]:
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(src)
         body = src[match.end() : end]
-        if "fsm:" not in body and "m_Name" not in body and "m_Father" not in body:
+        if (
+            "fsm:" not in body
+            and "m_Name" not in body
+            and "m_Father" not in body
+            and "m_GameObject:" not in body
+            and "m_Component:" not in body
+            and "m_Sprite:" not in body
+        ):
             continue
         try:
             document = yaml.load(body, Loader=_Loader)
