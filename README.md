@@ -87,6 +87,7 @@ scripts/00_build.sh --check     # optional: checks the tools and the export fold
 scripts/00_build.sh             # the standard version: hk3ds_std.romfs (the game data), hk3ds.3dsx and hk3ds.cia
 scripts/00_build.sh --hd        # the standard version and the HD one (hk3ds_hd.romfs, hk3ds_hd.cia: New 3DS family)
 scripts/00_build.sh --jobs 4    # converts 4 rooms at once: much faster with several CPU cores (1-2 GB of memory each)
+scripts/00_build.sh --check-romfs [romfs] # check required runtime assets in a built ROMFS and exit
 scripts/00_build.sh --index     # force regeneration of all export and lookup indexes
 ```
 The `index` step runs automatically when its generated PKL/JSON files or room list are missing. Use `--index` to

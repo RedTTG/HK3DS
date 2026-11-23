@@ -13,6 +13,7 @@
 # Options:
 #   --hd             also build the HD version
 #   --check          only check the requirements and the exports, then stop
+#   --check-romfs [DIR]  verify a built ROMFS and stop
 #   --rooms FILE     convert only the rooms listed in FILE, one per line (default: tools/data/all_rooms.txt)
 #   --from STEP      forget STEP and every step after it, and run them again (see --list)
 #   --only STEP      run just STEP (again, if it was done)
@@ -23,7 +24,7 @@
 set -o pipefail
 trap 'echo "Interrupted: stopping build." >&2; exit 130' INT TERM
 TOP=$(cd "$(dirname "$0")/.." && pwd); T=$TOP/tools; W=$TOP/work
-HD=0; ONLY=""; FROM=""; COMPILE=1; CHECKONLY=0; FORCE_INDEX=0; ROOMS=$T/data/all_rooms.txt; JOBS=1
+HD=0; ONLY=""; FROM=""; COMPILE=1; CHECKONLY=0; CHECKROMFS=0; CHECKROMFS_DIR=""; FORCE_INDEX=0; ROOMS=$T/data/all_rooms.txt; JOBS=1
 STEPS="check index objects rooms install pack particles gamedata compile"
 HDSTEPS="hd_copy hd_rooms hd_objects hd_gamedata hd_compile"
 
@@ -31,6 +32,10 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --hd) HD=1 ;;
     --check) CHECKONLY=1 ;;
+    --check-romfs)
+      CHECKROMFS=1
+      if [ "$#" -gt 1 ] && [ "${2#-}" = "$2" ]; then CHECKROMFS_DIR=$2; shift; fi
+      ;;
     --rooms) ROOMS=$(cd "$(dirname "$2")" && pwd)/$(basename "$2"); shift ;;
     --from) FROM=$2; shift ;;
     --only) ONLY=$2; shift ;;
@@ -51,6 +56,10 @@ if [ -z "$HKDATA" ]; then
 fi
 HKDATA=$(cd "$HKDATA" 2>/dev/null && pwd || echo "$HKDATA"); export HKDATA
 PY=${PYTHON:-python3}
+if [ "$CHECKROMFS" = 1 ]; then
+  CHECKROMFS_DIR=${CHECKROMFS_DIR:-$TOP/romfs}
+  exec "$PY" "$T/check_romfs.py" "$CHECKROMFS_DIR" --rooms "$ROOMS"
+fi
 export PYTHONUNBUFFERED=1
 export PYTHONIOENCODING=utf-8
 [ -n "$DEVKITPRO" ] && export PATH="$DEVKITPRO/tools/bin:${DEVKITARM:-$DEVKITPRO/devkitARM}/bin:$PATH"   # makerom, bannertool, the compiler
@@ -301,6 +310,7 @@ step_compile() {
   cd "$TOP" || return 1
   "$PY" "$T/make_icons.py" "$TOP" || return 1      # icon.png / banners of your own if there are none yet
   make && make data || return 1                    # hk3ds.3dsx (the code) and hk3ds_std.romfs (the game data)
+  "$PY" "$T/check_romfs.py" "$R" --rooms "$ROOMS" || return 1
   if command -v makerom >/dev/null && command -v bannertool >/dev/null; then make cia || return 1; fi
 }
 
@@ -329,6 +339,7 @@ step_hd_gamedata() {
 step_hd_compile() {
   [ $COMPILE = 1 ] || { say "  (--no-compile: skipped)"; return 0; }
   cd "$TOP" && "$PY" "$T/make_icons.py" "$TOP" && make HD=1 && make HD=1 data || return 1
+  "$PY" "$T/check_romfs.py" "$RH" --rooms "$ROOMS" || return 1
   if command -v makerom >/dev/null && command -v bannertool >/dev/null; then make HD=1 cia || return 1; fi
 }
 
