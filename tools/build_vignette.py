@@ -12,7 +12,15 @@ import bake_scene as B
 from texpack import MORTON
 
 sp = B.sprite_asset("f6afd349486b57545a4d6b7a09281673")
-im = B.sprite_image(sp)[0]  # 256 x 170, RGB 0
+if sp is None:
+    for guid, path in B.metamap("Sprite").items():
+        if os.path.splitext(os.path.basename(path))[0] == "vignette_large_v01":
+            sp = B.sprite_asset(guid)
+            break
+r = B.sprite_image(sp) if sp else None
+if not r:
+    sys.exit("Cannot resolve vignette_large_v01 sprite texture")
+im = r[0]  # 256 x 170, RGB 0
 a = np.zeros((256, 256), np.uint8)
 al = np.asarray(im)[..., 3]
 a[: al.shape[0], : al.shape[1]] = al  # top rows first (sampled at v = 1, like texpack)

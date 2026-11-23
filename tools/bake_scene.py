@@ -351,7 +351,11 @@ def scene_ambient(scene_path):
 
 def sprite_image(sp):
     """Returns (PIL RGBA image of the full untrimmed sprite rect region that has pixels, offset_x, offset_y within rect, ppu, pivot px)."""
-    rd = sp["m_RD"]
+    if not isinstance(sp, dict):
+        return None
+    rd = sp.get("m_RD")
+    if not isinstance(rd, dict):
+        return None
     tg = rd["texture"].get("guid")
     tp = texture_path(tg)
     if not tp:
