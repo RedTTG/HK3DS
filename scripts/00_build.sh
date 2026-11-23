@@ -21,6 +21,7 @@
 #   --jobs N, -j N   convert N rooms at once (much faster on a PC with several cores; each needs 1-2 GB of memory)
 #   --list           list the steps
 set -o pipefail
+trap 'echo "Interrupted: stopping build." >&2; exit 130' INT TERM
 TOP=$(cd "$(dirname "$0")/.." && pwd); T=$TOP/tools; W=$TOP/work
 HD=0; ONLY=""; FROM=""; COMPILE=1; CHECKONLY=0; FORCE_INDEX=0; ROOMS=$T/data/all_rooms.txt; JOBS=1
 STEPS="check index objects rooms install pack particles gamedata compile"
@@ -221,6 +222,8 @@ index_required() {
     "$T/data/cs_sigs.json" \
     "$T/data/fsm_templates.json" \
     "$T/data/particle_textures.json" \
+    "$T/data/gg_statues.txt" \
+    "$T/data/music_cues.txt" \
     "$T/data/script_guids.json"
   do
     [ -f "$f" ] || return 0

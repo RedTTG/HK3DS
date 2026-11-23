@@ -37,4 +37,6 @@ __pycache__/
 /tools/data/cs_sigs.json
 /tools/data/script_guids.json
 /tools/data/particle_textures.json
+/tools/data/gg_statues.txt
+/tools/data/music_cues.txt
 /tools/data/uoroots/
