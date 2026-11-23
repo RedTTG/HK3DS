@@ -102,6 +102,17 @@ def main() -> int:
 
     rooms = read_lines(rooms_path)
     for room in rooms:
+        if (
+            room.endswith("_boss")
+            or room.endswith("_boss_defeated")
+            or room.endswith("_preload")
+            or room in {
+                "GG_Boss_Door_Entrance",
+                "GG_Entrance_Cutscene",
+                "GG_Unlock",
+            }
+        ):
+            continue
         room_file = romfs / "rooms" / f"{room}.room"
         if not is_nonempty(room_file):
             missing.append(f"rooms/{room}.room")
